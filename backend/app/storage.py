@@ -1,82 +1,68 @@
-"""
-File-based job storage.
-
-Each job is stored as a JSON file under <jobs_dir>/<job_id>.json.
-This keeps the stack dependency-free (no database required) while remaining
-straightforward to swap for Redis or Postgres later.
-
-Data retention: a background task (called from the app lifespan) deletes
-files older than `data_retention_days` days.
-"""
-from __future__ import annotations
-
-import json
-import logging
-import os
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Optional
-
-from .config import get_settings
-from .models import JobRecord
-
-logger = logging.getLogger(__name__)
+import uuid
+import asyncio
+from datetime import datetime, timedelta
+from typing import Dict, Optional
+from dataclasses import dataclass, field
+from app.models import ScheduleRequest, ScheduleResult
 
 
-def _jobs_dir() -> Path:
-    settings = get_settings()
-    path = Path(settings.jobs_dir)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+@dataclass
+class Job:
+    job_id: str
+    created_at: datetime
+    paid: bool
+    request: ScheduleRequest
+    schedule: Optional[ScheduleResult] = None
+    expires_at: datetime = field(
+        default_factory=lambda: datetime.utcnow() + timedelta(days=30)
+    )
+    stripe_session_id: Optional[str] = None
 
 
-def _job_path(job_id: str) -> Path:
-    # Sanitise: only allow alphanumeric + hyphens to prevent path traversal
-    safe_id = "".join(c for c in job_id if c.isalnum() or c == "-")
-    return _jobs_dir() / f"{safe_id}.json"
+jobs: Dict[str, Job] = {}
 
 
-def save_job(job: JobRecord) -> None:
-    """Persist a JobRecord to disk (overwrites if exists)."""
-    path = _job_path(job.job_id)
-    path.write_text(job.model_dump_json(), encoding="utf-8")
+def create_job(
+    request: ScheduleRequest, schedule: Optional[ScheduleResult] = None
+) -> str:
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = Job(
+        job_id=job_id,
+        created_at=datetime.utcnow(),
+        paid=False,
+        request=request,
+        schedule=schedule,
+    )
+    return job_id
 
 
-def load_job(job_id: str) -> Optional[JobRecord]:
-    """Load a JobRecord from disk. Returns None if not found."""
-    path = _job_path(job_id)
-    if not path.exists():
+def get_job(job_id: str) -> Optional[Job]:
+    job = jobs.get(job_id)
+    if job and datetime.utcnow() > job.expires_at:
+        del jobs[job_id]
         return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return JobRecord(**data)
-    except Exception as exc:
-        logger.error("Failed to load job %s: %s", job_id, exc)
-        return None
+    return job
 
 
-def delete_job(job_id: str) -> None:
-    """Delete a job file if it exists."""
-    path = _job_path(job_id)
-    if path.exists():
-        path.unlink()
+def mark_paid(job_id: str, stripe_session_id: str) -> bool:
+    job = get_job(job_id)
+    if not job:
+        return False
+    if not job.paid:
+        job.paid = True
+        job.stripe_session_id = stripe_session_id
+    return True
 
 
-def purge_old_jobs() -> int:
-    """
-    Delete job files older than `data_retention_days` days.
-    Returns the number of files deleted.
-    """
-    settings = get_settings()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.data_retention_days)
-    deleted = 0
-    for p in _jobs_dir().glob("*.json"):
-        try:
-            mtime = datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc)
-            if mtime < cutoff:
-                p.unlink()
-                deleted += 1
-        except Exception as exc:
-            logger.warning("Could not purge %s: %s", p, exc)
-    logger.info("Purged %d old job files", deleted)
-    return deleted
+def cleanup_expired() -> int:
+    now = datetime.utcnow()
+    expired = [jid for jid, j in jobs.items() if now > j.expires_at]
+    for jid in expired:
+        del jobs[jid]
+    return len(expired)
+
+
+async def background_cleanup() -> None:
+    while True:
+        await asyncio.sleep(3600)  # run every hour
+        cleanup_expired()
