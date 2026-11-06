@@ -1,241 +1,286 @@
-"""
-Constraint-programming fixture scheduler using Google OR-Tools CP-SAT.
-
-Hard constraints
-----------------
-1. Every required match is scheduled exactly once.
-2. No team plays more than once per slot.
-3. No venue hosts more than `capacity` matches per slot.
-4. Team blackout dates are respected.
-
-Soft constraints (minimised as penalties)
------------------------------------------
-5. Home/away breaks (consecutive home or consecutive away games).
-6. Home/away balance (ideally each team hosts exactly half its games).
-
-The solver runs for at most `time_limit` seconds (default 10).
-"""
-from __future__ import annotations
-
-import itertools
-import time
-from typing import Dict, List, Tuple
-
+import time as time_module
+from datetime import date, time, datetime
+from typing import List, Optional, Dict, Tuple
 from ortools.sat.python import cp_model
-
-from .models import (
-    MatchResult,
-    QualityMetrics,
-    RoundRobinType,
-    ScheduleRequest,
-    ScheduleResult,
+from app.models import (
+    ScheduleRequest, ScheduleResult, Match, QualityMetrics, TimeSlot, Venue
 )
 
 
-def solve(request: ScheduleRequest, job_id: str, time_limit: int = 10) -> ScheduleResult:
-    """
-    Build and solve the CP-SAT model.
-    Returns a ScheduleResult (feasible=False if no solution found).
-    """
-    t_start = time.perf_counter()
-
+def solve_schedule(request: ScheduleRequest) -> ScheduleResult:
+    start_time = time_module.time()
+    
     teams = request.teams
-    venues = request.venues
-    slots = request.slots
-    n_teams = len(teams)
-    n_venues = len(venues)
-    n_slots = len(slots)
-
-    # -----------------------------------------------------------------------
-    # Build the list of required (home, away) match pairs
-    # -----------------------------------------------------------------------
-    pairs: List[Tuple[int, int]] = list(itertools.permutations(range(n_teams), 2))
-    if request.round_robin == RoundRobinType.single:
-        # Only (i, j) where i < j; home/away assigned by solver
-        pairs = [(i, j) for i, j in itertools.combinations(range(n_teams), 2)]
-        directed = False
+    n = len(teams)
+    team_idx = {t: i for i, t in enumerate(teams)}
+    
+    venues_map: Dict[str, Venue] = {v.name: v for v in request.venues}
+    
+    # Filter slots: remove blackout dates
+    valid_slots = [
+        s for s in request.slots
+        if s.date not in request.blackout_dates
+        and s.venue_name in venues_map
+    ]
+    
+    if request.round_robin == "single":
+        required_matches = n * (n - 1) // 2
     else:
-        # Both (i,j) and (j,i) — each team plays home once and away once vs every other
-        directed = True
-
-    n_matches = len(pairs)
-
-    model = cp_model.CpModel()
-
-    # x[m, s, v] = 1 if match m is played in slot s at venue v
-    x: Dict[Tuple[int, int, int], cp_model.IntVar] = {}
-    for m in range(n_matches):
-        for s in range(n_slots):
-            for v in range(n_venues):
-                x[m, s, v] = model.new_bool_var(f"x_m{m}_s{s}_v{v}")
-
-    # -----------------------------------------------------------------------
-    # Hard constraint 1: each match scheduled exactly once
-    # -----------------------------------------------------------------------
-    for m in range(n_matches):
-        model.add(
-            sum(x[m, s, v] for s in range(n_slots) for v in range(n_venues)) == 1
-        )
-
-    # -----------------------------------------------------------------------
-    # Hard constraint 2: no team plays twice in the same slot
-    # -----------------------------------------------------------------------
-    for t in range(n_teams):
-        for s in range(n_slots):
-            involved = []
-            for m, (home, away) in enumerate(pairs):
-                if home == t or away == t:
-                    involved.extend(x[m, s, v] for v in range(n_venues))
-            if involved:
-                model.add(sum(involved) <= 1)
-
-    # -----------------------------------------------------------------------
-    # Hard constraint 3: venue capacity per slot
-    # -----------------------------------------------------------------------
-    for v in range(n_venues):
-        cap = venues[v].capacity
-        for s in range(n_slots):
-            model.add(sum(x[m, s, v] for m in range(n_matches)) <= cap)
-
-    # -----------------------------------------------------------------------
-    # Hard constraint 4: team blackout dates
-    # -----------------------------------------------------------------------
-    # Build set of slot indices that fall on blackout dates for each team
-    for t in range(n_teams):
-        blackout_set = set(teams[t].blackout_dates)
-        for s, slot in enumerate(slots):
-            if slot.date in blackout_set:
-                for m, (home, away) in enumerate(pairs):
-                    if home == t or away == t:
-                        for v in range(n_venues):
-                            model.add(x[m, s, v] == 0)
-
-    # -----------------------------------------------------------------------
-    # Soft constraint 5 & 6: home/away balance and breaks
-    # -----------------------------------------------------------------------
-    # For single round-robin we need to decide which team is "home"
-    # We introduce a direction variable d[m] = 1 means pairs[m][0] is home
-    if not directed:
-        d = [model.new_bool_var(f"d_{m}") for m in range(n_matches)]
-    else:
-        # In double RR the direction is fixed by the pair ordering
-        d = [model.new_constant(1)] * n_matches  # type: ignore[list-item]
-
-    # home_count[t] = total home matches for team t
-    home_count = []
-    for t in range(n_teams):
-        terms = []
-        for m, (i, j) in enumerate(pairs):
-            if i == t:
-                terms.append(d[m])
-            elif j == t:
-                terms.append(d[m].Not() if not directed else model.new_constant(0))  # type: ignore[union-attr]
-        if terms:
-            hc = model.new_int_var(0, n_matches, f"home_count_{t}")
-            model.add(hc == sum(terms))
-            home_count.append(hc)
-        else:
-            home_count.append(model.new_constant(0))
-
-    total_per_team = n_teams - 1 if not directed else (n_teams - 1) * 2
-    ideal_home = total_per_team // 2
-
-    balance_penalties = []
-    for t in range(n_teams):
-        dev = model.new_int_var(0, total_per_team, f"balance_dev_{t}")
-        model.add_abs_equality(dev, home_count[t] - ideal_home)
-        balance_penalties.append(dev)
-
-    # Break penalty: for each team, sort its matches by slot and count consecutive same side
-    # This is complex to model exactly in CP-SAT without heavy overhead.
-    # We use a lighter proxy: penalise if a team plays home (or away) more than
-    # max_consecutive_home_away times in a row in slot order.
-    max_consec = request.max_consecutive_home_away
-
-    # Simple penalty: total imbalance is the primary soft objective
-    total_balance = model.new_int_var(0, n_teams * total_per_team, "total_balance")
-    model.add(total_balance == sum(balance_penalties))
-
-    model.minimize(total_balance)
-
-    # -----------------------------------------------------------------------
-    # Solve
-    # -----------------------------------------------------------------------
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = float(time_limit)
-    solver.parameters.num_search_workers = 4
-    status = solver.solve(model)
-
-    t_end = time.perf_counter()
-    solve_time = round(t_end - t_start, 3)
-
-    feasible = status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
-
-    if not feasible:
+        required_matches = n * (n - 1)
+    
+    if len(valid_slots) < required_matches:
+        elapsed = int((time_module.time() - start_time) * 1000)
         return ScheduleResult(
-            job_id=job_id,
-            league_name=request.league_name,
             matches=[],
             metrics=QualityMetrics(
-                feasible=False,
                 violations=0,
                 home_away_breaks=0,
                 balance_score=0.0,
-                solve_time_seconds=solve_time,
+                solve_time_ms=elapsed,
+                status="INFEASIBLE"
             ),
+            infeasibility_reason=(
+                f"Not enough time slots: need at least {required_matches} slots "
+                f"for {n} teams ({request.round_robin} round-robin), "
+                f"but only {len(valid_slots)} valid slots available after removing blackout dates."
+            ),
+            total_rounds=0,
+            total_matches=0
         )
-
-    # -----------------------------------------------------------------------
+    
+    model = cp_model.CpModel()
+    S = len(valid_slots)
+    
+    # match_vars[i][j][s] = 1 means team i (home) vs team j (away) in slot s
+    # Only create for i != j
+    match_vars: Dict[Tuple[int, int, int], cp_model.IntVar] = {}
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            for s in range(S):
+                match_vars[(i, j, s)] = model.NewBoolVar(f'm_{i}_{j}_{s}')
+    
+    # Hard constraint 1: each pair plays exactly the right number of times
+    for i in range(n):
+        for j in range(i + 1, n):
+            if request.round_robin == "single":
+                # Exactly one match between i and j (either i home or j home)
+                model.Add(
+                    sum(match_vars[(i, j, s)] + match_vars[(j, i, s)] for s in range(S)) == 1
+                )
+            else:
+                # Double round robin: i hosts j once, j hosts i once
+                model.Add(sum(match_vars[(i, j, s)] for s in range(S)) == 1)
+                model.Add(sum(match_vars[(j, i, s)] for s in range(S)) == 1)
+    
+    # Hard constraint 2: no team plays more than once per slot
+    for s in range(S):
+        for t in range(n):
+            # team t plays in slot s (either home or away)
+            plays_in_slot = []
+            for j in range(n):
+                if j == t:
+                    continue
+                plays_in_slot.append(match_vars[(t, j, s)])  # t is home
+                plays_in_slot.append(match_vars[(j, t, s)])  # t is away
+            model.Add(sum(plays_in_slot) <= 1)
+    
+    # Hard constraint 3: no venue hosts more than one match per slot
+    # (each slot already belongs to exactly one venue — enforce at most 1 match per slot)
+    for s in range(S):
+        all_matches_in_slot = []
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    continue
+                all_matches_in_slot.append(match_vars[(i, j, s)])
+        model.Add(sum(all_matches_in_slot) <= 1)
+    
+    # Soft constraint: home/away breaks
+    # A break is when a team plays two consecutive matches both home or both away
+    # Sort slots by date+time to get chronological order
+    sorted_slot_indices = sorted(
+        range(S),
+        key=lambda s: (valid_slots[s].date, valid_slots[s].time)
+    )
+    
+    penalty_terms = []
+    
+    # Build per-team chronological match order
+    # For each team, collect their matches in order and penalise consecutive same H/A
+    # We track this by looking at consecutive slot pairs
+    # This is an approximation: penalise each consecutive slot pair where the same team
+    # plays the same role
+    for t in range(n):
+        for idx in range(len(sorted_slot_indices) - 1):
+            s1 = sorted_slot_indices[idx]
+            s2 = sorted_slot_indices[idx + 1]
+            
+            # home in s1 and home in s2
+            home_s1 = [match_vars[(t, j, s1)] for j in range(n) if j != t]
+            home_s2 = [match_vars[(t, j, s2)] for j in range(n) if j != t]
+            away_s1 = [match_vars[(j, t, s1)] for j in range(n) if j != t]
+            away_s2 = [match_vars[(j, t, s2)] for j in range(n) if j != t]
+            
+            both_home = model.NewBoolVar(f'bh_{t}_{idx}')
+            both_away = model.NewBoolVar(f'ba_{t}_{idx}')
+            
+            # Sum of home plays in s1 and s2
+            sum_home_s1 = model.NewIntVar(0, 1, f'sh1_{t}_{idx}')
+            sum_home_s2 = model.NewIntVar(0, 1, f'sh2_{t}_{idx}')
+            sum_away_s1 = model.NewIntVar(0, 1, f'sa1_{t}_{idx}')
+            sum_away_s2 = model.NewIntVar(0, 1, f'sa2_{t}_{idx}')
+            
+            model.Add(sum_home_s1 == sum(home_s1))
+            model.Add(sum_home_s2 == sum(home_s2))
+            model.Add(sum_away_s1 == sum(away_s1))
+            model.Add(sum_away_s2 == sum(away_s2))
+            
+            model.AddMultiplicationEquality(both_home, [sum_home_s1, sum_home_s2])
+            model.AddMultiplicationEquality(both_away, [sum_away_s1, sum_away_s2])
+            
+            penalty_terms.append(both_home)
+            penalty_terms.append(both_away)
+    
+    # Derby separation penalty
+    derby_penalty_weight = 1000
+    derby_penalty_vars = []
+    for team_a_name, team_b_name in request.derby_pairs:
+        if team_a_name not in team_idx or team_b_name not in team_idx:
+            continue
+        ta = team_idx[team_a_name]
+        tb = team_idx[team_b_name]
+        
+        # Find slots in the first derby_separation "rounds"
+        # Approximate: first (derby_separation * n//2) slot indices
+        early_slots = sorted_slot_indices[:request.derby_separation * max(1, n // 2)]
+        
+        for s in early_slots:
+            if (ta, tb, s) in match_vars:
+                dv = model.NewBoolVar(f'derby_{ta}_{tb}_{s}')
+                model.Add(dv == match_vars[(ta, tb, s)])
+                derby_penalty_vars.append(dv)
+            if (tb, ta, s) in match_vars:
+                dv = model.NewBoolVar(f'derby_{tb}_{ta}_{s}')
+                model.Add(dv == match_vars[(tb, ta, s)])
+                derby_penalty_vars.append(dv)
+    
+    # Objective: minimise breaks + derby penalties
+    objective_terms = []
+    for v in penalty_terms:
+        objective_terms.append(v)
+    for v in derby_penalty_vars:
+        # weighted
+        weighted = model.NewIntVar(0, derby_penalty_weight, f'dw_{v.Name()}')
+        model.Add(weighted == derby_penalty_weight * v)
+        objective_terms.append(weighted)
+    
+    if objective_terms:
+        model.Minimize(sum(objective_terms))
+    
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.num_workers = 4
+    
+    status_code = solver.Solve(model)
+    elapsed = int((time_module.time() - start_time) * 1000)
+    
+    status_map = {
+        cp_model.OPTIMAL: "OPTIMAL",
+        cp_model.FEASIBLE: "FEASIBLE",
+        cp_model.INFEASIBLE: "INFEASIBLE",
+        cp_model.UNKNOWN: "TIMEOUT",
+        cp_model.MODEL_INVALID: "INFEASIBLE",
+    }
+    status_str = status_map.get(status_code, "TIMEOUT")
+    
+    if status_code not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        reason = "The solver could not find a valid schedule with the given constraints."
+        if len(valid_slots) < required_matches:
+            reason = (
+                f"Not enough time slots: need {required_matches}, have {len(valid_slots)} "
+                f"after blackout dates."
+            )
+        return ScheduleResult(
+            matches=[],
+            metrics=QualityMetrics(
+                violations=0,
+                home_away_breaks=0,
+                balance_score=0.0,
+                solve_time_ms=elapsed,
+                status=status_str
+            ),
+            infeasibility_reason=reason,
+            total_rounds=0,
+            total_matches=0
+        )
+    
     # Extract solution
-    # -----------------------------------------------------------------------
-    match_results: List[MatchResult] = []
+    matches: List[Match] = []
+    
+    # Assign round numbers: sort by slot date+time, group into rounds
+    # A round = all slots with the same date (simplified grouping)
+    unique_dates = sorted(set(valid_slots[s].date for s in range(S)))
+    date_to_round = {d: i + 1 for i, d in enumerate(unique_dates)}
+    
+    for s in range(S):
+        slot = valid_slots[s]
+        venue = venues_map[slot.venue_name]
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    continue
+                if solver.Value(match_vars[(i, j, s)]) == 1:
+                    matches.append(Match(
+                        round_num=date_to_round.get(slot.date, 1),
+                        date=slot.date,
+                        time=slot.time,
+                        home_team=teams[i],
+                        away_team=teams[j],
+                        venue=slot.venue_name,
+                        venue_capacity=venue.capacity
+                    ))
+    
+    matches.sort(key=lambda m: (m.round_num, m.date, m.time))
+    
+    # Compute quality metrics
+    # Home/away breaks: count consecutive same role
     home_away_breaks = 0
-    balance_total = int(solver.objective_value)
-
-    # Build per-team sorted list of (slot_index, is_home)
-    team_games: Dict[int, List[Tuple[int, bool]]] = {t: [] for t in range(n_teams)}
-
-    for m, (i, j) in enumerate(pairs):
-        for s in range(n_slots):
-            for v in range(n_venues):
-                if solver.value(x[m, s, v]) == 1:
-                    if directed:
-                        home_idx, away_idx = i, j
-                    else:
-                        if solver.value(d[m]) == 1:
-                            home_idx, away_idx = i, j
-                        else:
-                            home_idx, away_idx = j, i
-                    match_results.append(
-                        MatchResult(
-                            home_team=teams[home_idx].name,
-                            away_team=teams[away_idx].name,
-                            venue=venues[v].name,
-                            slot_label=slots[s].label,
-                            slot_date=slots[s].date,
-                        )
-                    )
-                    team_games[home_idx].append((s, True))
-                    team_games[away_idx].append((s, False))
-
-    # Count breaks (consecutive same side)
-    for t in range(n_teams):
-        games = sorted(team_games[t], key=lambda g: g[0])
-        for k in range(1, len(games)):
-            if games[k][1] == games[k - 1][1]:
+    for t_name in teams:
+        team_matches = sorted(
+            [m for m in matches if m.home_team == t_name or m.away_team == t_name],
+            key=lambda m: (m.date, m.time)
+        )
+        prev_home = None
+        for m in team_matches:
+            is_home = m.home_team == t_name
+            if prev_home is not None and is_home == prev_home:
                 home_away_breaks += 1
-
-    balance_score = balance_total / max(1, n_teams)
-
+            prev_home = is_home
+    
+    # Balance score: max deviation from perfect 50/50 home/away
+    balance_score = 0.0
+    for t_name in teams:
+        home_count = sum(1 for m in matches if m.home_team == t_name)
+        away_count = sum(1 for m in matches if m.away_team == t_name)
+        total = home_count + away_count
+        if total > 0:
+            ideal = total / 2
+            balance_score += abs(home_count - ideal) / ideal
+    balance_score /= len(teams)
+    
+    total_rounds = max((m.round_num for m in matches), default=0)
+    
     return ScheduleResult(
-        job_id=job_id,
-        league_name=request.league_name,
-        matches=sorted(match_results, key=lambda m: (m.slot_date, m.slot_label)),
+        matches=matches,
         metrics=QualityMetrics(
-            feasible=True,
             violations=0,
             home_away_breaks=home_away_breaks,
-            balance_score=balance_score,
-            solve_time_seconds=solve_time,
+            balance_score=round(balance_score, 3),
+            solve_time_ms=elapsed,
+            status=status_str
         ),
+        total_rounds=total_rounds,
+        total_matches=len(matches)
     )
