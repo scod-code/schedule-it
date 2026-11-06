@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Payment confirmed — Schedule-it{% endblock %}
+
+{% block content %}
+<section class="card success-card">
+  <div class="success-icon">✓</div>
+  <h1>Payment confirmed</h1>
+  <p>Your full fixture schedule for <strong>{{ job.result.league_name }}</strong> is ready.</p>
+
+  <div class="download-buttons">
+    <a href="/download/{{ job.job_id }}/pdf" class="btn btn-primary">⬇ Download PDF</a>
+    <a href="/download/{{ job.job_id }}/csv" class="btn btn-secondary">⬇ Download CSV</a>
+  </div>
+
+  <h2>ICS calendar files (one per team)</h2>
+  <p class="form-note">Import into Google Calendar, Apple Calendar, or Outlook.</p>
+  <ul class="ics-list">
+    {% for team in teams %}
+    <li>
+      <a href="/download/{{ job.job_id }}/ics/{{ team | urlencode }}" class="btn btn-outline">
+        📅 {{ team }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <p class="form-note">
+    These download links work for 30 days. After that, your data is automatically deleted.<br>
+    Need a re-solve (e.g. after fixture cancellations)? <a href="/">Start a new job →</a>
+  </p>
+</section>
+{% endblock %}

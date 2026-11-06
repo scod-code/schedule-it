@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Terms of Service — Schedule-it{% endblock %}
+
+{% block content %}
+<section class="card policy-card">
+  <h1>Terms of Service</h1>
+  <p class="muted">Last updated: 1 June 2025</p>
+
+  <h2>1. Service description</h2>
+  <p>
+    Schedule-it is an automated scheduling tool. You provide constraints (teams, venues, dates),
+    and the service returns a fixture list. The service is provided "as is" without any guarantee
+    of fitness for a particular purpose.
+  </p>
+
+  <h2>2. Payment</h2>
+  <p>
+    A one-off payment of £9 (or the displayed price) unlocks the full fixture download for a single
+    job. Payment is processed by Stripe. You will only be asked to pay after a valid schedule has
+    been generated.
+  </p>
+
+  <h2>3. Refunds</h2>
+  <p>
+    See our <a href="/refund">Refund Policy</a>.
+  </p>
+
+  <h2>4. Acceptable use</h2>
+  <p>
+    You may use the generated schedules for any lawful purpose. You must not attempt to
+    circumvent the payment system, scrape the site in a way that degrades service, or upload
+    unlawful content.
+  </p>
+
+  <h2>5. Accuracy</h2>
+  <p>
+    We verify hard constraints (no double-booking, blackout dates) algorithmically before
+    delivering a schedule. However, you should review the output before distributing it.
+    We do not accept liability for losses arising from scheduling errors.
+  </p>
+
+  <h2>6. Data retention</h2>
+  <p>
+    Job data is deleted automatically after 30 days. Save your downloads promptly.
+  </p>
+
+  <h2>7. Governing law</h2>
+  <p>
+    These terms are governed by the laws of England and Wales.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Email: <a href="mailto:hello@schedule-it.app">hello@schedule-it.app</a>
+  </p>
+</section>
+{% endblock %}

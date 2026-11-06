@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy — Schedule-it{% endblock %}
+
+{% block content %}
+<section class="card policy-card">
+  <h1>Privacy Policy</h1>
+  <p class="muted">Last updated: 1 June 2025</p>
+
+  <h2>What we collect</h2>
+  <p>
+    When you submit a schedule request, we store the data you enter (team names, venues, time slots)
+    on our servers so we can generate your fixture list and deliver it to you after payment.
+    We do not collect your name, email address, or any other personal information unless you
+    contact us directly.
+  </p>
+  <p>
+    When you pay, Stripe processes your card details. We never see or store your payment card number.
+    Stripe's privacy policy is available at <a href="https://stripe.com/gb/privacy" rel="noopener noreferrer">stripe.com/gb/privacy</a>.
+  </p>
+
+  <h2>How long we keep your data</h2>
+  <p>
+    Your schedule job (the input constraints and generated fixture list) is automatically deleted
+    30 days after it was created. No manual action is required.
+  </p>
+
+  <h2>Cookies</h2>
+  <p>
+    This site does not use tracking or advertising cookies. Stripe may set cookies during the
+    payment flow; those are governed by Stripe's policy.
+  </p>
+
+  <h2>Third-party services</h2>
+  <ul>
+    <li><strong>Stripe</strong> — payment processing</li>
+    <li><strong>Your hosting provider</strong> — server logs (IP address, request path, timestamp)
+        are retained for up to 14 days for security and debugging purposes.</li>
+  </ul>
+
+  <h2>Your rights</h2>
+  <p>
+    Under UK GDPR you have the right to access, correct, or erase personal data we hold about you.
+    To exercise these rights, email us at <a href="mailto:privacy@schedule-it.app">privacy@schedule-it.app</a>.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Schedule-it is operated as a sole trader in the United Kingdom.<br>
+    Email: <a href="mailto:privacy@schedule-it.app">privacy@schedule-it.app</a>
+  </p>
+</section>
+{% endblock %}

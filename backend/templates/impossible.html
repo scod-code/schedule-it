@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}No valid schedule found — Schedule-it{% endblock %}
+
+{% block content %}
+<section class="card impossible-card">
+  <div class="impossible-icon">⚠</div>
+  <h1>No valid schedule found</h1>
+  <p>
+    The solver could not find a clash-free fixture list for
+    <strong>{{ job.request.league_name if job.request else "your league" }}</strong>
+    within the given constraints.
+  </p>
+
+  <h2>Common causes and fixes</h2>
+  <ul class="tips-list">
+    <li>
+      <strong>Not enough time slots.</strong>
+      A {{ job.request.teams|length if job.request else "?" }}-team
+      {% if job.request and job.request.round_robin.value == "single" %}single{% else %}double{% endif %}
+      round-robin needs at least
+      <strong>
+        {% if job.request %}
+          {% set n = job.request.teams|length %}
+          {{ (n * (n-1) // 2) if job.request.round_robin.value == "single" else (n * (n-1)) }}
+        {% else %}
+          ?
+        {% endif %}
+      </strong>
+      match slots. Add more slots or remove teams.
+    </li>
+    <li>
+      <strong>Too many blackout dates.</strong>
+      If a large portion of slots are blocked for several teams, the solver runs out of room.
+      Review and trim blackout dates.
+    </li>
+    <li>
+      <strong>Venue capacity too low.</strong>
+      If all your slots use a single pitch with capacity 1, matches can't run in parallel.
+      Either add more dates or increase venue capacity.
+    </li>
+    <li>
+      <strong>Max consecutive home/away too strict.</strong>
+      A very low value (e.g. 1) with many teams can make the problem infeasible.
+      Try raising it to 3 or higher.
+    </li>
+  </ul>
+
+  <a href="/" class="btn btn-primary">Try again with different inputs →</a>
+  <p class="form-note">No charge — you are only asked to pay when a valid schedule is found.</p>
+</section>
+{% endblock %}

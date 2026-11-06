@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Refund Policy — Schedule-it{% endblock %}
+
+{% block content %}
+<section class="card policy-card">
+  <h1>Refund Policy</h1>
+  <p class="muted">Last updated: 1 June 2025</p>
+
+  <h2>Our promise</h2>
+  <p>
+    We only ask for payment after a mathematically valid, clash-free schedule has been generated.
+    If you are not satisfied with your schedule for any reason, email us within <strong>14 days</strong>
+    of purchase and we will issue a full refund — no questions asked.
+  </p>
+
+  <h2>How to request a refund</h2>
+  <ol>
+    <li>Email <a href="mailto:refunds@schedule-it.app">refunds@schedule-it.app</a> with the subject "Refund request".</li>
+    <li>Include your job ID (visible on the download page and in your Stripe receipt).</li>
+    <li>We will process the refund within 5 business days. Stripe typically returns funds in 5–10 business days after that.</li>
+  </ol>
+
+  <h2>Exceptions</h2>
+  <p>
+    We cannot issue refunds more than 30 days after the original purchase, or for jobs where the
+    download link has been accessed more than three times (indicating the schedule has been used).
+    In practice we apply common sense — if something went wrong, contact us.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Email: <a href="mailto:refunds@schedule-it.app">refunds@schedule-it.app</a>
+  </p>
+</section>
+{% endblock %}

@@ -1,0 +1,346 @@
+/* ============================================================
+   Schedule-it – main stylesheet
+   Design: clean, professional, mobile-first
+   ============================================================ */
+
+/* ---------- Reset & base ---------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #111827;
+  background: #f9fafb;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main { flex: 1; }
+
+a { color: #1a56db; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3 { line-height: 1.25; }
+
+/* ---------- Layout ---------- */
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+/* ---------- Header ---------- */
+.site-header {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.875rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.site-header .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #111827;
+  text-decoration: none;
+  letter-spacing: -0.5px;
+}
+.logo span { color: #1a56db; }
+
+nav { display: flex; gap: 1.5rem; }
+nav a { font-size: 0.9rem; color: #4b5563; }
+nav a:hover { color: #1a56db; text-decoration: none; }
+
+/* ---------- Footer ---------- */
+.site-footer {
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  padding: 1.25rem 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  text-align: center;
+  padding: 3.5rem 0 2.5rem;
+}
+
+.hero h1 {
+  font-size: clamp(1.75rem, 5vw, 2.75rem);
+  font-weight: 800;
+  margin-bottom: 1rem;
+}
+
+.hero h1 span { color: #1a56db; }
+
+.hero-sub {
+  max-width: 580px;
+  margin: 0 auto 1rem;
+  color: #4b5563;
+  font-size: 1.05rem;
+}
+
+.hero-price {
+  font-size: 1rem;
+  color: #374151;
+}
+
+/* ---------- Card ---------- */
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 2rem;
+  margin-bottom: 1.75rem;
+}
+
+/* ---------- Form ---------- */
+.form-section h2 { margin-bottom: 1.5rem; font-size: 1.3rem; }
+
+.form-group { margin-bottom: 1.25rem; }
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 540px) { .form-row { grid-template-columns: 1fr; } }
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+  color: #374151;
+}
+
+.hint {
+  display: block;
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 0.15rem;
+  line-height: 1.4;
+}
+
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #111827;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #1a56db;
+  box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.12);
+}
+
+textarea { resize: vertical; }
+code { font-size: 0.85em; background: #f3f4f6; padding: 0.1em 0.35em; border-radius: 3px; }
+
+.form-note {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 0.5rem;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-block;
+  padding: 0.6rem 1.25rem;
+  border-radius: 7px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid transparent;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-primary {
+  background: #1a56db;
+  color: #fff;
+}
+.btn-primary:hover { background: #1648be; text-decoration: none; }
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #111827;
+}
+.btn-secondary:hover { background: #d1d5db; text-decoration: none; }
+
+.btn-outline {
+  background: transparent;
+  color: #1a56db;
+  border-color: #1a56db;
+}
+.btn-outline:hover { background: #eff6ff; text-decoration: none; }
+
+.btn-lg { padding: 0.8rem 1.75rem; font-size: 1.05rem; margin-top: 0.5rem; }
+
+/* ---------- Badges ---------- */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.badge-green { background: #d1fae5; color: #065f46; }
+
+/* ---------- Metrics row ---------- */
+.metrics-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+/* ---------- Fixture table ---------- */
+.fixture-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.fixture-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: #1a56db;
+  color: #fff;
+  font-weight: 600;
+}
+
+.fixture-table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.fixture-table tbody tr:nth-child(even) { background: #f9fafb; }
+
+/* ---------- Blurred hint ---------- */
+.blurred-hint {
+  background: linear-gradient(to bottom, transparent, #fff 60%);
+  text-align: center;
+  padding: 1.5rem;
+  margin-top: -1rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* ---------- Pay card ---------- */
+.pay-card { border: 2px solid #1a56db; }
+.pay-card h2 { margin-bottom: 1rem; }
+
+.pay-benefits {
+  list-style: none;
+  margin-bottom: 1.25rem;
+}
+.pay-benefits li { padding: 0.2rem 0; font-size: 0.95rem; }
+
+.price-tag {
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #111827;
+}
+
+/* ---------- Download buttons ---------- */
+.download-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+/* ---------- Success card ---------- */
+.success-card { text-align: center; }
+.success-icon {
+  font-size: 3rem;
+  color: #059669;
+  margin-bottom: 0.5rem;
+}
+.success-card h1 { margin-bottom: 0.5rem; }
+.success-card p { color: #4b5563; margin-bottom: 1.5rem; }
+.success-card h2 { margin: 1.5rem 0 0.5rem; font-size: 1.1rem; }
+
+.ics-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+/* ---------- Impossible card ---------- */
+.impossible-card { text-align: center; }
+.impossible-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+.impossible-card h1 { margin-bottom: 0.75rem; }
+.impossible-card > p { color: #4b5563; margin-bottom: 1.5rem; }
+.impossible-card h2 { text-align: left; margin-bottom: 0.75rem; font-size: 1.1rem; }
+
+.tips-list {
+  text-align: left;
+  margin: 0 0 1.5rem 1.25rem;
+}
+.tips-list li { margin-bottom: 0.6rem; font-size: 0.95rem; }
+
+/* ---------- Features grid ---------- */
+.trust-section { padding: 1rem 0 2rem; }
+.trust-section h2 { margin-bottom: 1.25rem; font-size: 1.3rem; }
+
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 540px) { .features-grid { grid-template-columns: 1fr; } }
+
+.feature {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+.feature h3 { font-size: 1rem; margin-bottom: 0.35rem; }
+.feature p { font-size: 0.88rem; color: #4b5563; }
+
+/* ---------- Policy pages ---------- */
+.policy-card h1 { margin-bottom: 0.25rem; }
+.policy-card h2 { margin: 1.5rem 0 0.5rem; font-size: 1.05rem; }
+.policy-card p, .policy-card li { font-size: 0.95rem; color: #374151; margin-bottom: 0.5rem; }
+.policy-card ul, .policy-card ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+
+/* ---------- Helpers ---------- */
+.muted { color: #6b7280; font-size: 0.85rem; }
+
+/* ---------- Preview header ---------- */
+.preview-header {
+  padding: 2rem 0 1rem;
+}
+.preview-header h1 { font-size: 1.6rem; }

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Schedule-it — Clash-free fixture schedules in seconds{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Generate clash-free league fixture schedules instantly. Enter your teams, venues, and time slots — get a complete season schedule as PDF, CSV, and ICS.{% endblock %}" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <!-- HTMX for progressive enhancement -->
+  <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2uH1/8UmSal4JZGQ1AwU9RN2V+PNSldQwj" crossorigin="anonymous" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="logo">Schedule<span>-it</span></a>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/refund">Refunds</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        &copy; 2025 Schedule-it &mdash;
+        <a href="/privacy">Privacy</a> &middot;
+        <a href="/terms">Terms</a> &middot;
+        <a href="/refund">Refunds</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

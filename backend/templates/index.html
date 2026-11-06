@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule-it — Generate league fixtures with venue &amp; blackout constraints{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Clash-free fixture schedules<br><span>in seconds.</span></h1>
+  <p class="hero-sub">
+    Enter your teams, venues, and time slots. Get a complete season schedule back instantly
+    — balanced home/away, no double-bookings, blackout dates respected.
+  </p>
+  <p class="hero-price">Free preview &nbsp;·&nbsp; <strong>£9</strong> for the full PDF, CSV &amp; calendar download.</p>
+</section>
+
+<section class="form-section card">
+  <h2>Build your fixture list</h2>
+
+  <form method="post" action="/solve" id="schedule-form">
+
+    <div class="form-group">
+      <label for="league_name">League / competition name</label>
+      <input type="text" id="league_name" name="league_name" required
+             placeholder="e.g. Southfield 5-a-side Summer League 2025"
+             maxlength="120" />
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="round_robin">Format</label>
+        <select id="round_robin" name="round_robin">
+          <option value="single">Single round-robin (each pair once)</option>
+          <option value="double">Double round-robin (home &amp; away)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="max_consecutive">Max consecutive home or away games</label>
+        <input type="number" id="max_consecutive" name="max_consecutive"
+               min="1" max="10" value="3" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="teams">
+        Teams
+        <span class="hint">One team per line: <code>Team Name, Home Venue[, blackout-date, ...]</code><br>
+        Example: <code>Tigers FC, Riverside Park, 2025-10-25</code></span>
+      </label>
+      <textarea id="teams" name="teams" rows="6" required
+                placeholder="Tigers FC, Riverside Park&#10;Lions United, Central Stadium&#10;Phoenix Athletic, Riverside Park, 2025-10-25"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="venues">
+        Venues
+        <span class="hint">One per line: <code>Venue Name[, capacity]</code><br>
+        Capacity = simultaneous matches (default 1).<br>
+        Example: <code>Riverside Park, 2</code></span>
+      </label>
+      <textarea id="venues" name="venues" rows="4" required
+                placeholder="Riverside Park&#10;Central Stadium, 1&#10;Eastside Ground"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="slots">
+        Time slots
+        <span class="hint">One per line: <code>Slot Label, YYYY-MM-DD</code><br>
+        Example: <code>Saturday 10:00, 2025-09-06</code></span>
+      </label>
+      <textarea id="slots" name="slots" rows="8" required
+                placeholder="Saturday 10:00, 2025-09-06&#10;Saturday 12:00, 2025-09-06&#10;Saturday 10:00, 2025-09-13&#10;Saturday 12:00, 2025-09-13"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+      Generate fixtures →
+    </button>
+    <p class="form-note">Solving takes up to 10 seconds. You will see a free preview before any payment.</p>
+  </form>
+</section>
+
+<section class="trust-section">
+  <h2>Why Schedule-it?</h2>
+  <div class="features-grid">
+    <div class="feature">
+      <h3>🏟️ Real constraints</h3>
+      <p>Venue capacities, team blackout dates, and "no team plays twice in a day" are hard rules, not suggestions.</p>
+    </div>
+    <div class="feature">
+      <h3>⚖️ Fair balance</h3>
+      <p>The solver minimises home/away imbalance automatically using a proven constraint-programming engine.</p>
+    </div>
+    <div class="feature">
+      <h3>📥 Three export formats</h3>
+      <p>Full season PDF, CSV for your spreadsheet, and a .ics calendar file for every team.</p>
+    </div>
+    <div class="feature">
+      <h3>🔒 No account needed</h3>
+      <p>One job, one payment, one download. Your data is deleted after 30 days.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

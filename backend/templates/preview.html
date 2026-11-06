@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Fixture Preview — {{ job.result.league_name }} — Schedule-it{% endblock %}
+
+{% block content %}
+<section class="preview-header">
+  <h1>{{ job.result.league_name }}</h1>
+  <div class="metrics-row">
+    <span class="badge badge-green">✓ Feasible</span>
+    <span>{{ total_matches }} fixtures</span>
+    <span>Home/away breaks: {{ metrics.home_away_breaks }}</span>
+    <span>Balance score: {{ "%.2f"|format(metrics.balance_score) }}</span>
+    <span class="muted">Solved in {{ "%.1f"|format(metrics.solve_time_seconds) }}s</span>
+  </div>
+</section>
+
+{% if paid %}
+<!-- Full schedule view for paid jobs -->
+<section class="card">
+  <h2>Your downloads are ready</h2>
+  <div class="download-buttons">
+    <a href="/download/{{ job.job_id }}/pdf" class="btn btn-primary">⬇ Download PDF</a>
+    <a href="/download/{{ job.job_id }}/csv" class="btn btn-secondary">⬇ Download CSV</a>
+  </div>
+  <p class="form-note">ICS calendar files per team are available on the confirmation page.</p>
+</section>
+{% else %}
+<!-- Free preview: first 3 fixtures -->
+<section class="card">
+  <h2>Free preview — first {{ preview_matches|length }} of {{ total_matches }} fixtures</h2>
+
+  <table class="fixture-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Slot</th>
+        <th>Home</th>
+        <th>Away</th>
+        <th>Venue</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for match in preview_matches %}
+      <tr>
+        <td>{{ match.slot_date }}</td>
+        <td>{{ match.slot_label }}</td>
+        <td>{{ match.home_team }}</td>
+        <td>{{ match.away_team }}</td>
+        <td>{{ match.venue }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if total_matches > 3 %}
+  <div class="blurred-hint">
+    <p>+ {{ total_matches - 3 }} more fixtures hidden &mdash; unlock to see all.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card pay-card">
+  <h2>Unlock the full schedule</h2>
+  <ul class="pay-benefits">
+    <li>✓ Complete {{ total_matches }}-fixture season schedule</li>
+    <li>✓ PDF ready to print and share</li>
+    <li>✓ CSV for your own spreadsheet</li>
+    <li>✓ .ics calendar file for every team</li>
+  </ul>
+  <p class="price-tag"><strong>£9</strong> one-off payment</p>
+  <form method="post" action="/pay/{{ job.job_id }}">
+    <button type="submit" class="btn btn-primary btn-lg">Pay £9 and download →</button>
+  </form>
+  <p class="form-note">Secure payment via Stripe. No account needed. Data deleted after 30 days.</p>
+  <p class="form-note">If the schedule is wrong for any reason, email us for a full refund. <a href="/refund">Refund policy →</a></p>
+</section>
+{% endif %}
+
+<p><a href="/">&larr; Create another schedule</a></p>
+{% endblock %}
