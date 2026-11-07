@@ -1,49 +1,53 @@
 {% extends "base.html" %}
 
-{% block title %}Fixture Preview — {{ job.result.league_name }} — Schedule-it{% endblock %}
+{% block title %}Fixture Preview — {{ job.request.league_name }} — Schedule-it{% endblock %}
 
 {% block content %}
 <section class="preview-header">
-  <h1>{{ job.result.league_name }}</h1>
-  <div class="metrics-row">
-    <span class="badge badge-green">✓ Feasible</span>
-    <span>{{ total_matches }} fixtures</span>
-    <span>Home/away breaks: {{ metrics.home_away_breaks }}</span>
-    <span>Balance score: {{ "%.2f"|format(metrics.balance_score) }}</span>
-    <span class="muted">Solved in {{ "%.1f"|format(metrics.solve_time_seconds) }}s</span>
+  <h1>Your Schedule Preview</h1>
+  <h2 class="preview-league-name">{{ job.request.league_name }}</h2>
+
+  <div class="metrics-bar">
+    {% if metrics.violations == 0 %}
+    <span class="badge badge-success">✓ No clashes detected</span>
+    {% else %}
+    <span class="badge badge-error">⚠ {{ metrics.violations }} violation(s)</span>
+    {% endif %}
+    <div class="metric">
+      <span class="metric-label">Home/Away Breaks</span>
+      <span class="metric-value">{{ metrics.home_away_breaks }}</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Balance Score</span>
+      <span class="metric-value">{{ "%.0f"|format(metrics.balance_score * 100) }}%</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Total Fixtures</span>
+      <span class="metric-value">{{ job.schedule.total_matches }}</span>
+    </div>
   </div>
 </section>
 
-{% if paid %}
-<!-- Full schedule view for paid jobs -->
-<section class="card">
-  <h2>Your downloads are ready</h2>
-  <div class="download-buttons">
-    <a href="/download/{{ job.job_id }}/pdf" class="btn btn-primary">⬇ Download PDF</a>
-    <a href="/download/{{ job.job_id }}/csv" class="btn btn-secondary">⬇ Download CSV</a>
-  </div>
-  <p class="form-note">ICS calendar files per team are available on the confirmation page.</p>
-</section>
-{% else %}
-<!-- Free preview: first 3 fixtures -->
-<section class="card">
-  <h2>Free preview — first {{ preview_matches|length }} of {{ total_matches }} fixtures</h2>
-
-  <table class="fixture-table">
+<!-- Preview table -->
+<section class="form-section">
+  <h3>First {{ preview_matches|length }} fixtures</h3>
+  <table class="schedule-table">
     <thead>
       <tr>
+        <th>Round</th>
         <th>Date</th>
-        <th>Slot</th>
-        <th>Home</th>
-        <th>Away</th>
+        <th>Time</th>
+        <th>Home Team</th>
+        <th>Away Team</th>
         <th>Venue</th>
       </tr>
     </thead>
     <tbody>
       {% for match in preview_matches %}
       <tr>
-        <td>{{ match.slot_date }}</td>
-        <td>{{ match.slot_label }}</td>
+        <td>{{ match.round_num }}</td>
+        <td>{{ match.date }}</td>
+        <td>{{ match.time }}</td>
         <td>{{ match.home_team }}</td>
         <td>{{ match.away_team }}</td>
         <td>{{ match.venue }}</td>
@@ -52,29 +56,32 @@
     </tbody>
   </table>
 
-  {% if total_matches > 3 %}
-  <div class="blurred-hint">
-    <p>+ {{ total_matches - 3 }} more fixtures hidden &mdash; unlock to see all.</p>
+  {% if remaining > 0 %}
+  <div class="blurred-section" aria-hidden="true">
+    <p>... {{ remaining }} more matches hidden ...</p>
+  </div>
+  <div class="preview-gate">
+    <p class="muted">Unlock the full schedule to see all {{ job.schedule.total_matches }} fixtures.</p>
   </div>
   {% endif %}
 </section>
 
-<section class="card pay-card">
-  <h2>Unlock the full schedule</h2>
-  <ul class="pay-benefits">
-    <li>✓ Complete {{ total_matches }}-fixture season schedule</li>
-    <li>✓ PDF ready to print and share</li>
-    <li>✓ CSV for your own spreadsheet</li>
-    <li>✓ .ics calendar file for every team</li>
+<!-- CTA card -->
+<div class="cta-card">
+  <h2>Unlock Full Schedule — £9</h2>
+  <p>One-time payment. No account needed.</p>
+  <ul class="cta-features">
+    <li>Full PDF report — ready to print and share</li>
+    <li>CSV export for Excel or Google Sheets</li>
+    <li>Calendar file (.ics) for every team</li>
+    <li>Valid for 30 days from generation</li>
   </ul>
-  <p class="price-tag"><strong>£9</strong> one-off payment</p>
-  <form method="post" action="/pay/{{ job.job_id }}">
-    <button type="submit" class="btn btn-primary btn-lg">Pay £9 and download →</button>
-  </form>
-  <p class="form-note">Secure payment via Stripe. No account needed. Data deleted after 30 days.</p>
-  <p class="form-note">If the schedule is wrong for any reason, email us for a full refund. <a href="/refund">Refund policy →</a></p>
-</section>
-{% endif %}
+  <a href="/checkout/{{ job.job_id }}" class="btn-primary btn-large">Pay £9 &amp; Download</a>
+  <p class="form-note" style="margin-top:1rem">
+    Secure payment via Stripe. If the schedule is wrong for any reason, we'll refund you.
+    <a href="/refund">Refund policy →</a>
+  </p>
+</div>
 
-<p><a href="/">&larr; Create another schedule</a></p>
+<p style="margin-top:1.5rem"><a href="/">&larr; Back to form</a></p>
 {% endblock %}

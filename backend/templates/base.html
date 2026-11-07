@@ -1,35 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}Schedule-it — Clash-free fixture schedules in seconds{% endblock %}</title>
-  <meta name="description" content="{% block meta_description %}Generate clash-free league fixture schedules instantly. Enter your teams, venues, and time slots — get a complete season schedule as PDF, CSV, and ICS.{% endblock %}" />
-  <link rel="stylesheet" href="/static/css/style.css" />
-  <!-- HTMX for progressive enhancement -->
-  <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2uH1/8UmSal4JZGQ1AwU9RN2V+PNSldQwj" crossorigin="anonymous" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Schedule-it{% endblock %} — Clash-free fixtures in seconds</title>
+  <meta name="description" content="{% block meta_description %}Generate clash-free league fixture schedules instantly. Enter your teams, venues, and time slots — get a complete season schedule as PDF, CSV, and ICS.{% endblock %}">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5ViYgSibmK" crossorigin="anonymous" defer></script>
 </head>
 <body>
-  <header class="site-header">
-    <div class="container">
-      <a href="/" class="logo">Schedule<span>-it</span></a>
-      <nav>
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Schedule<span>-it</span></a>
+      <div class="nav-links">
         <a href="/">Home</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <a href="/refund">Refunds</a>
-      </nav>
+      </div>
     </div>
-  </header>
-
-  <main class="container">
+  </nav>
+  <main class="main-content">
     {% block content %}{% endblock %}
   </main>
-
-  <footer class="site-footer">
-    <div class="container">
-      <p>
-        &copy; 2025 Schedule-it &mdash;
+  <footer class="footer">
+    <div class="footer-inner">
+      <p>&copy; 2025 Schedule-it &mdash;
         <a href="/privacy">Privacy</a> &middot;
         <a href="/terms">Terms</a> &middot;
         <a href="/refund">Refunds</a>

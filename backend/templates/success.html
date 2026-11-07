@@ -1,33 +1,44 @@
 {% extends "base.html" %}
 
-{% block title %}Payment confirmed — Schedule-it{% endblock %}
+{% block title %}Payment Successful — Schedule-it{% endblock %}
 
 {% block content %}
-<section class="card success-card">
-  <div class="success-icon">✓</div>
-  <h1>Payment confirmed</h1>
-  <p>Your full fixture schedule for <strong>{{ job.result.league_name }}</strong> is ready.</p>
+<section class="form-section" style="text-align:center; padding:3rem 2rem;">
+  <div style="font-size:3.5rem; margin-bottom:0.75rem;">✓</div>
+  <h1 class="success-heading">Payment Successful!</h1>
+  <p style="color:#475569; margin-bottom:2rem;">Your fixture schedule for <strong>{{ job.request.league_name }}</strong> is ready to download.</p>
 
-  <div class="download-buttons">
-    <a href="/download/{{ job.job_id }}/pdf" class="btn btn-primary">⬇ Download PDF</a>
-    <a href="/download/{{ job.job_id }}/csv" class="btn btn-secondary">⬇ Download CSV</a>
+  <div class="download-grid">
+    <a href="/download/{{ job.job_id }}/pdf" class="download-btn">
+      <span style="font-size:1.5rem">📄</span>
+      <div>
+        <strong>Download PDF</strong>
+        <span class="form-note" style="display:block">Full season report, ready to print</span>
+      </div>
+    </a>
+    <a href="/download/{{ job.job_id }}/csv" class="download-btn">
+      <span style="font-size:1.5rem">📊</span>
+      <div>
+        <strong>Download CSV</strong>
+        <span class="form-note" style="display:block">Open in Excel or Google Sheets</span>
+      </div>
+    </a>
   </div>
 
-  <h2>ICS calendar files (one per team)</h2>
-  <p class="form-note">Import into Google Calendar, Apple Calendar, or Outlook.</p>
-  <ul class="ics-list">
+  <h2 style="margin:2rem 0 0.75rem; font-size:1.1rem;">Calendar Files (.ics) — one per team</h2>
+  <p class="form-note" style="margin-bottom:1rem">Import into Google Calendar, Apple Calendar, or Outlook.</p>
+  <div class="download-grid">
     {% for team in teams %}
-    <li>
-      <a href="/download/{{ job.job_id }}/ics/{{ team | urlencode }}" class="btn btn-outline">
-        📅 {{ team }}
-      </a>
-    </li>
+    <a href="/download/{{ job.job_id }}/ics/{{ team }}" class="download-btn">
+      <span style="font-size:1.5rem">📅</span>
+      <span>{{ team }} Calendar (.ics)</span>
+    </a>
     {% endfor %}
-  </ul>
+  </div>
 
-  <p class="form-note">
-    These download links work for 30 days. After that, your data is automatically deleted.<br>
-    Need a re-solve (e.g. after fixture cancellations)? <a href="/">Start a new job →</a>
+  <p class="form-note" style="margin-top:2rem">
+    These links are valid for 30 days. After that, your data is automatically deleted.<br>
+    Need to reschedule? <a href="/">Start a new job →</a>
   </p>
 </section>
 {% endblock %}

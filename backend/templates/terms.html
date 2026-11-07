@@ -3,56 +3,70 @@
 {% block title %}Terms of Service — Schedule-it{% endblock %}
 
 {% block content %}
-<section class="card policy-card">
+<div class="prose">
   <h1>Terms of Service</h1>
-  <p class="muted">Last updated: 1 June 2025</p>
+  <p class="muted">Last updated: 1 June 2025 &mdash; Governing law: England and Wales</p>
 
   <h2>1. Service description</h2>
   <p>
-    Schedule-it is an automated scheduling tool. You provide constraints (teams, venues, dates),
-    and the service returns a fixture list. The service is provided "as is" without any guarantee
-    of fitness for a particular purpose.
+    Schedule-it is an automated scheduling tool. You provide constraints (teams, venues, dates,
+    blackout periods) and the service returns a fixture list. The service is provided on a
+    pay-per-use basis: you see a free preview, then pay once to unlock downloads for that job.
   </p>
 
-  <h2>2. Payment</h2>
+  <h2>2. No account required</h2>
   <p>
-    A one-off payment of £9 (or the displayed price) unlocks the full fixture download for a single
-    job. Payment is processed by Stripe. You will only be asked to pay after a valid schedule has
-    been generated.
+    No account is needed. Each job is identified by a unique reference. Keep your download link
+    — it is valid for 30 days from generation.
   </p>
 
-  <h2>3. Refunds</h2>
+  <h2>3. Payment</h2>
+  <p>
+    A one-off payment (shown at the time of purchase) unlocks the full fixture download for a
+    single job. Payment is processed by Stripe. You will only be asked to pay after a valid
+    schedule has been generated — if the constraints are impossible, no charge is made.
+  </p>
+
+  <h2>4. Refunds</h2>
   <p>
     See our <a href="/refund">Refund Policy</a>.
   </p>
 
-  <h2>4. Acceptable use</h2>
+  <h2>5. Acceptable use</h2>
   <p>
     You may use the generated schedules for any lawful purpose. You must not attempt to
-    circumvent the payment system, scrape the site in a way that degrades service, or upload
-    unlawful content.
+    circumvent the payment system, scrape the site in a way that degrades service for other
+    users, or submit unlawful content.
   </p>
 
-  <h2>5. Accuracy</h2>
+  <h2>6. Accuracy</h2>
   <p>
     We verify hard constraints (no double-booking, blackout dates) algorithmically before
     delivering a schedule. However, you should review the output before distributing it.
     We do not accept liability for losses arising from scheduling errors.
+    We do not claim that generated schedules are "optimal" unless the solver has proved it.
   </p>
 
-  <h2>6. Data retention</h2>
+  <h2>7. Intellectual property</h2>
+  <p>
+    schedule-it.com owns the software, source code, and branding. The fixture data you generate
+    belongs to you.
+  </p>
+
+  <h2>8. Data retention</h2>
   <p>
     Job data is deleted automatically after 30 days. Save your downloads promptly.
   </p>
 
-  <h2>7. Governing law</h2>
+  <h2>9. Governing law</h2>
   <p>
-    These terms are governed by the laws of England and Wales.
+    These terms are governed by the laws of England and Wales. Any disputes shall be subject
+    to the exclusive jurisdiction of the courts of England and Wales.
   </p>
 
   <h2>Contact</h2>
   <p>
-    Email: <a href="mailto:hello@schedule-it.app">hello@schedule-it.app</a>
+    Email: <a href="mailto:hello@schedule-it.com">hello@schedule-it.com</a>
   </p>
-</section>
+</div>
 {% endblock %}

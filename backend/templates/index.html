@@ -4,76 +4,144 @@
 
 {% block content %}
 <section class="hero">
-  <h1>Clash-free fixture schedules<br><span>in seconds.</span></h1>
+  <h1>Generate clash-free fixtures<br>in seconds.</h1>
   <p class="hero-sub">
     Enter your teams, venues, and time slots. Get a complete season schedule back instantly
     — balanced home/away, no double-bookings, blackout dates respected.
   </p>
-  <p class="hero-price">Free preview &nbsp;·&nbsp; <strong>£9</strong> for the full PDF, CSV &amp; calendar download.</p>
+  <p class="hero-price">Free preview &nbsp;&middot;&nbsp; <strong>£9</strong> for the full PDF, CSV &amp; calendar download.</p>
 </section>
 
-<section class="form-section card">
+<section class="form-section">
   <h2>Build your fixture list</h2>
 
-  <form method="post" action="/solve" id="schedule-form">
+  {% if error %}
+  <div class="alert alert-error" role="alert">
+    <strong>Could not generate schedule:</strong> {{ error }}
+  </div>
+  {% endif %}
 
-    <div class="form-group">
-      <label for="league_name">League / competition name</label>
-      <input type="text" id="league_name" name="league_name" required
-             placeholder="e.g. Southfield 5-a-side Summer League 2025"
-             maxlength="120" />
-    </div>
+  <form method="post" action="/generate" id="schedule-form">
 
-    <div class="form-row">
-      <div class="form-group">
-        <label for="round_robin">Format</label>
-        <select id="round_robin" name="round_robin">
-          <option value="single">Single round-robin (each pair once)</option>
-          <option value="double">Double round-robin (home &amp; away)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="max_consecutive">Max consecutive home or away games</label>
-        <input type="number" id="max_consecutive" name="max_consecutive"
-               min="1" max="10" value="3" />
-      </div>
-    </div>
+    <input type="hidden" name="league_name" value="My League">
 
+    <!-- Teams -->
     <div class="form-group">
       <label for="teams">
         Teams
-        <span class="hint">One team per line: <code>Team Name, Home Venue[, blackout-date, ...]</code><br>
-        Example: <code>Tigers FC, Riverside Park, 2025-10-25</code></span>
+        <span class="hint">One team per line.</span>
       </label>
       <textarea id="teams" name="teams" rows="6" required
-                placeholder="Tigers FC, Riverside Park&#10;Lions United, Central Stadium&#10;Phoenix Athletic, Riverside Park, 2025-10-25"></textarea>
+                class="input-field"
+                placeholder="Arsenal FC&#10;Chelsea FC&#10;Liverpool FC&#10;Manchester City"></textarea>
     </div>
 
+    <!-- Venues -->
     <div class="form-group">
-      <label for="venues">
+      <label>
         Venues
-        <span class="hint">One per line: <code>Venue Name[, capacity]</code><br>
-        Capacity = simultaneous matches (default 1).<br>
-        Example: <code>Riverside Park, 2</code></span>
+        <span class="hint">Name and capacity (simultaneous matches). Capacity defaults to 1.</span>
       </label>
-      <textarea id="venues" name="venues" rows="4" required
-                placeholder="Riverside Park&#10;Central Stadium, 1&#10;Eastside Ground"></textarea>
+      <div id="venue-rows">
+        <div class="venue-row" id="venue-row-0">
+          <input type="text" name="venue_name_0" placeholder="Venue name" required class="input-field">
+          <input type="number" name="venue_capacity_0" placeholder="Capacity" min="1" value="1" class="input-field input-small">
+        </div>
+      </div>
+      <script>let venueCount = 1;</script>
+      <button type="button"
+        hx-get="/htmx/venue-row"
+        hx-target="#venue-rows"
+        hx-swap="beforeend"
+        onclick="this.setAttribute('hx-vals', JSON.stringify({index: venueCount++}))"
+        class="btn-secondary" style="margin-top:0.5rem">+ Add Venue</button>
     </div>
 
+    <!-- Time Slots -->
     <div class="form-group">
-      <label for="slots">
-        Time slots
-        <span class="hint">One per line: <code>Slot Label, YYYY-MM-DD</code><br>
-        Example: <code>Saturday 10:00, 2025-09-06</code></span>
+      <label>
+        Time Slots
+        <span class="hint">Date, time, and venue for each match slot.</span>
       </label>
-      <textarea id="slots" name="slots" rows="8" required
-                placeholder="Saturday 10:00, 2025-09-06&#10;Saturday 12:00, 2025-09-06&#10;Saturday 10:00, 2025-09-13&#10;Saturday 12:00, 2025-09-13"></textarea>
+      <div id="slot-rows">
+        <div class="slot-row" id="slot-row-0">
+          <input type="date" name="slot_date_0" required class="input-field">
+          <input type="time" name="slot_time_0" required class="input-field">
+          <input type="text" name="slot_venue_0" placeholder="Venue name" required class="input-field">
+        </div>
+      </div>
+      <script>let slotCount = 1;</script>
+      <button type="button"
+        hx-get="/htmx/slot-row"
+        hx-target="#slot-rows"
+        hx-swap="beforeend"
+        onclick="this.setAttribute('hx-vals', JSON.stringify({index: slotCount++}))"
+        class="btn-secondary" style="margin-top:0.5rem">+ Add Time Slot</button>
     </div>
 
-    <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
-      Generate fixtures →
-    </button>
-    <p class="form-note">Solving takes up to 10 seconds. You will see a free preview before any payment.</p>
+    <!-- Blackout Dates -->
+    <div class="form-group">
+      <label for="blackout_dates">
+        Blackout Dates <span class="optional-label">(optional)</span>
+        <span class="hint">Dates when no matches can be played. One per line: YYYY-MM-DD.</span>
+      </label>
+      <textarea id="blackout_dates" name="blackout_dates" rows="3"
+                class="input-field"
+                placeholder="2024-12-25&#10;2025-01-01"></textarea>
+    </div>
+
+    <!-- Schedule Type -->
+    <div class="form-group">
+      <label>Schedule Type</label>
+      <div class="radio-group">
+        <label>
+          <input type="radio" name="round_robin" value="single" checked>
+          Single round-robin <span class="hint-inline">(each pair plays once)</span>
+        </label>
+        <label>
+          <input type="radio" name="round_robin" value="double">
+          Double round-robin <span class="hint-inline">(home &amp; away for each pair)</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Derby Pairs -->
+    <div class="form-group">
+      <label for="derby_pairs">
+        Derby Pairs <span class="optional-label">(optional)</span>
+        <span class="hint">These teams won't meet in the first few rounds. One pair per line: Team A vs Team B</span>
+      </label>
+      <textarea id="derby_pairs" name="derby_pairs" rows="3"
+                class="input-field"
+                placeholder="Arsenal FC vs Chelsea FC"></textarea>
+    </div>
+
+    <!-- Consecutive Match Limits -->
+    <div class="form-group">
+      <label>Consecutive Match Limits</label>
+      <div class="inline-number-row">
+        <div class="inline-number-group">
+          <label for="max_consecutive_home" class="sub-label">Max consecutive home games</label>
+          <input type="number" id="max_consecutive_home" name="max_consecutive_home"
+                 min="1" max="10" value="3" class="input-field input-small">
+        </div>
+        <div class="inline-number-group">
+          <label for="max_consecutive_away" class="sub-label">Max consecutive away games</label>
+          <input type="number" id="max_consecutive_away" name="max_consecutive_away"
+                 min="1" max="10" value="3" class="input-field input-small">
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="submit-area">
+      <button type="submit" class="btn-primary btn-large" id="submit-btn">
+        Generate Schedule (free preview)
+        <span class="htmx-indicator" aria-hidden="true">⏳</span>
+      </button>
+      <p class="form-note">Solving takes up to 10 seconds. You will see a free preview before any payment.</p>
+    </div>
+
   </form>
 </section>
 
@@ -82,7 +150,7 @@
   <div class="features-grid">
     <div class="feature">
       <h3>🏟️ Real constraints</h3>
-      <p>Venue capacities, team blackout dates, and "no team plays twice in a day" are hard rules, not suggestions.</p>
+      <p>Venue capacities, team blackout dates, and "no team plays twice in a day" are hard rules — not suggestions.</p>
     </div>
     <div class="feature">
       <h3>⚖️ Fair balance</h3>
