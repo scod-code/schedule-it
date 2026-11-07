@@ -1,176 +1,198 @@
-"""
-FastAPI application entry point.
-
-Routes
-------
-GET  /                      — landing page / form
-POST /solve                 — submit constraints, solve, redirect to preview
-GET  /preview/{job_id}      — show free preview (first 3 fixtures) + pay button
-POST /pay/{job_id}          — create Stripe Checkout Session, redirect
-GET  /success               — post-payment landing; verifies session, unlocks downloads
-GET  /download/{job_id}/pdf — download full PDF (paid jobs only)
-GET  /download/{job_id}/csv — download full CSV (paid jobs only)
-GET  /download/{job_id}/ics/{team} — download ICS for one team (paid jobs only)
-POST /webhook               — Stripe webhook
-GET  /impossible/{job_id}   — shown when constraints are infeasible
-GET  /privacy               — privacy policy
-GET  /terms                 — terms of service
-GET  /refund                — refund policy
-"""
-from __future__ import annotations
-
-import logging
-import uuid
+import urllib.parse
+import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from urllib.parse import quote
+from datetime import date, time
+from typing import Optional, List
 
-from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
+import stripe
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 
-from .config import get_settings
-from .exporter import to_csv, to_ics_per_team, to_pdf
-from .models import JobRecord, JobStatus, RoundRobinType, ScheduleRequest, Team, TimeSlot, Venue
-from .payments import create_checkout_session, handle_webhook
-from .solver import solve
-from .storage import load_job, purge_old_jobs, save_job
+from app.config import settings
+from app.models import ScheduleRequest, Venue, TimeSlot
+from app.storage import create_job, get_job, mark_paid, background_cleanup
+from app.solver import solve_schedule
+from app.exporter import generate_pdf, generate_csv, generate_ics_per_team
+from app.payments import create_checkout_session, verify_webhook
 
-logger = logging.getLogger(__name__)
 
-BASE_DIR = __import__("pathlib").Path(__file__).resolve().parent.parent
-
+# ---------------------------------------------------------------------------
+# Lifespan: start background cleanup and configure Stripe
+# ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Purge old jobs on startup
-    purge_old_jobs()
+    asyncio.create_task(background_cleanup())
+    stripe.api_key = settings.stripe_secret_key
     yield
 
 
-app = FastAPI(title="Schedule-it", lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+app = FastAPI(lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _require_paid_job(job_id: str) -> JobRecord:
-    job = load_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job.status != JobStatus.paid:
-        raise HTTPException(status_code=402, detail="Payment required")
-    return job
-
-
-# ---------------------------------------------------------------------------
-# Pages
+# Routes
 # ---------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "venue_count": 1, "slot_count": 1}
+    )
 
 
-@app.post("/solve", response_class=HTMLResponse)
-async def solve_route(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    league_name: str = Form(...),
-    teams_raw: str = Form(..., alias="teams"),
-    venues_raw: str = Form(..., alias="venues"),
-    slots_raw: str = Form(..., alias="slots"),
-    round_robin: str = Form("single"),
-    max_consecutive: int = Form(3),
-):
-    """
-    Parse the submitted form, run the solver, persist the job, redirect to
-    /preview or /impossible.
+@app.get("/htmx/venue-row", response_class=HTMLResponse)
+async def htmx_venue_row(index: int):
+    html = f"""<div class="venue-row" id="venue-row-{index}">
+  <input type="text" name="venue_name_{index}" placeholder="Venue name" required class="input-field">
+  <input type="number" name="venue_capacity_{index}" placeholder="Capacity" min="1" value="100" class="input-field input-small">
+  <button type="button" class="btn-remove" onclick="this.closest('.venue-row').remove()">✕</button>
+</div>"""
+    return HTMLResponse(html)
 
-    Form fields (all plain text, newline-separated):
-      teams   — "TeamName,HomeVenue[,blackout_date1,blackout_date2,...]" one per line
-      venues  — "VenueName[,capacity]" one per line
-      slots   — "SlotLabel,YYYY-MM-DD" one per line
-    """
-    settings = get_settings()
-    job_id = str(uuid.uuid4())
 
-    # --- Parse teams ---
-    team_list: list[Team] = []
-    for line in teams_raw.strip().splitlines():
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) < 2:
-            continue
-        team_list.append(
-            Team(
-                name=parts[0],
-                home_venue=parts[1],
-                blackout_dates=parts[2:] if len(parts) > 2 else [],
-            )
+@app.get("/htmx/slot-row", response_class=HTMLResponse)
+async def htmx_slot_row(index: int):
+    html = f"""<div class="slot-row" id="slot-row-{index}">
+  <input type="date" name="slot_date_{index}" required class="input-field">
+  <input type="time" name="slot_time_{index}" required class="input-field">
+  <input type="text" name="slot_venue_{index}" placeholder="Venue name" required class="input-field">
+  <button type="button" class="btn-remove" onclick="this.closest('.slot-row').remove()">✕</button>
+</div>"""
+    return HTMLResponse(html)
+
+
+@app.post("/generate")
+async def generate(request: Request):
+    form = await request.form()
+
+    # --- Teams ---
+    teams_raw: str = form.get("teams", "")
+    teams: List[str] = [t.strip() for t in teams_raw.splitlines() if t.strip()]
+
+    # --- Blackout dates ---
+    blackout_raw: str = form.get("blackout_dates", "")
+    blackout_dates: List[date] = []
+    for line in blackout_raw.splitlines():
+        line = line.strip()
+        if line:
+            try:
+                blackout_dates.append(date.fromisoformat(line))
+            except ValueError:
+                pass  # skip malformed dates
+
+    # --- Round robin type ---
+    round_robin: str = form.get("round_robin", "single")
+    if round_robin not in ("single", "double"):
+        round_robin = "single"
+
+    # --- Derby pairs ---
+    derby_raw: str = form.get("derby_pairs", "")
+    derby_pairs: List[tuple] = []
+    for line in derby_raw.splitlines():
+        line = line.strip()
+        if " vs " in line:
+            parts = line.split(" vs ", 1)
+            a, b = parts[0].strip(), parts[1].strip()
+            if a and b:
+                derby_pairs.append((a, b))
+
+    # --- Consecutive limits ---
+    try:
+        max_consecutive_home = int(form.get("max_consecutive_home", 3))
+    except (ValueError, TypeError):
+        max_consecutive_home = 3
+
+    try:
+        max_consecutive_away = int(form.get("max_consecutive_away", 3))
+    except (ValueError, TypeError):
+        max_consecutive_away = 3
+
+    # --- Venues ---
+    venues: List[Venue] = []
+    i = 0
+    while f"venue_name_{i}" in form:
+        name = form.get(f"venue_name_{i}", "").strip()
+        if name:
+            try:
+                capacity = int(form.get(f"venue_capacity_{i}", 100))
+            except (ValueError, TypeError):
+                capacity = 100
+            venues.append(Venue(name=name, capacity=capacity))
+        i += 1
+
+    # --- Time slots ---
+    slots: List[TimeSlot] = []
+    i = 0
+    while f"slot_date_{i}" in form:
+        slot_date_str = form.get(f"slot_date_{i}", "").strip()
+        slot_time_str = form.get(f"slot_time_{i}", "").strip()
+        slot_venue_str = form.get(f"slot_venue_{i}", "").strip()
+        if slot_date_str and slot_time_str and slot_venue_str:
+            try:
+                parsed_date = date.fromisoformat(slot_date_str)
+                parsed_time = time.fromisoformat(slot_time_str)
+                slots.append(TimeSlot(
+                    date=parsed_date,
+                    time=parsed_time,
+                    venue_name=slot_venue_str,
+                ))
+            except ValueError:
+                pass  # skip malformed slots
+        i += 1
+
+    # --- Build and validate ScheduleRequest ---
+    try:
+        req = ScheduleRequest(
+            teams=teams,
+            venues=venues,
+            slots=slots,
+            round_robin=round_robin,
+            blackout_dates=blackout_dates,
+            max_consecutive_home=max_consecutive_home,
+            max_consecutive_away=max_consecutive_away,
+            derby_pairs=derby_pairs,
+        )
+    except ValidationError as exc:
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "error": str(exc),
+                "venue_count": max(len(venues), 1),
+                "slot_count": max(len(slots), 1),
+            },
+            status_code=400,
         )
 
-    # --- Parse venues ---
-    venue_list: list[Venue] = []
-    for line in venues_raw.strip().splitlines():
-        parts = [p.strip() for p in line.split(",")]
-        if not parts[0]:
-            continue
-        cap = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
-        venue_list.append(Venue(name=parts[0], capacity=cap))
+    # --- Solve ---
+    result = solve_schedule(req)
 
-    # --- Parse slots ---
-    slot_list: list[TimeSlot] = []
-    for line in slots_raw.strip().splitlines():
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) < 2:
-            continue
-        slot_list.append(TimeSlot(label=parts[0], date=parts[1]))
+    if result.metrics.status == "INFEASIBLE":
+        return templates.TemplateResponse(
+            "impossible.html",
+            {"request": request, "reason": result.infeasibility_reason},
+        )
 
-    if not team_list or not venue_list or not slot_list:
-        raise HTTPException(status_code=422, detail="Teams, venues, and slots are all required.")
-
-    sched_request = ScheduleRequest(
-        league_name=league_name,
-        teams=team_list,
-        venues=venue_list,
-        slots=slot_list,
-        round_robin=RoundRobinType(round_robin),
-        max_consecutive_home_away=max_consecutive,
-    )
-
-    # Run the solver (synchronous; fast enough for the 10-second limit)
-    result = solve(sched_request, job_id, time_limit=settings.solver_time_limit_seconds)
-
-    status = JobStatus.solved if result.metrics.feasible else JobStatus.impossible
-
-    job = JobRecord(
-        job_id=job_id,
-        status=status,
-        request=sched_request,
-        result=result,
-        created_at=datetime.now(timezone.utc).isoformat(),
-    )
-    save_job(job)
-
-    if not result.metrics.feasible:
-        return RedirectResponse(f"/impossible/{job_id}", status_code=303)
+    # --- Store job and redirect to preview ---
+    job_id = create_job(request=req, schedule=result)
     return RedirectResponse(f"/preview/{job_id}", status_code=303)
 
 
 @app.get("/preview/{job_id}", response_class=HTMLResponse)
 async def preview(request: Request, job_id: str):
-    job = load_job(job_id)
-    if job is None or job.result is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or expired")
 
-    # Show only the first 3 fixtures as the free preview
-    preview_matches = job.result.matches[:3]
-    total_matches = len(job.result.matches)
-    paid = job.status == JobStatus.paid
+    preview_matches = [m for m in job.schedule.matches if m.round_num <= 5]
+    remaining = job.schedule.total_matches - len(preview_matches)
 
     return templates.TemplateResponse(
         "preview.html",
@@ -178,140 +200,100 @@ async def preview(request: Request, job_id: str):
             "request": request,
             "job": job,
             "preview_matches": preview_matches,
-            "total_matches": total_matches,
-            "paid": paid,
-            "metrics": job.result.metrics,
+            "remaining": remaining,
+            "metrics": job.schedule.metrics,
         },
     )
 
 
-@app.post("/pay/{job_id}")
-async def pay(job_id: str):
-    job = load_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job.status == JobStatus.paid:
-        return RedirectResponse(f"/preview/{job_id}", status_code=303)
-    if job.status != JobStatus.solved:
-        raise HTTPException(status_code=400, detail="Job is not in a payable state")
+@app.get("/checkout/{job_id}")
+async def checkout(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or expired")
 
-    checkout_url = create_checkout_session(job_id)
-    return RedirectResponse(checkout_url, status_code=303)
+    url = create_checkout_session(job_id)
+    return RedirectResponse(url, status_code=303)
+
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+
+    try:
+        event = verify_webhook(payload, sig_header)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    if event["type"] == "checkout.session.completed":
+        session_obj = event["data"]["object"]
+        job_id = session_obj["metadata"]["job_id"]
+        session_id = session_obj["id"]
+        mark_paid(job_id, session_id)
+
+    return {"status": "ok"}
 
 
 @app.get("/success", response_class=HTMLResponse)
 async def success(request: Request, session_id: str):
-    # Find job by stripe session id
-    # (Webhook is the authoritative mark-as-paid path; this page just gives
-    #  the user a nice confirmation and download links.)
-    from .storage import _jobs_dir
-    job = None
-    for p in _jobs_dir().glob("*.json"):
-        candidate = load_job(p.stem)
-        if candidate and candidate.stripe_session_id == session_id:
-            job = candidate
-            break
+    session = stripe.checkout.Session.retrieve(session_id)
+    job_id = session.metadata["job_id"]
 
-    if job is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or expired")
 
-    # Ensure job is marked paid (in case webhook hasn't arrived yet)
-    if job.status != JobStatus.paid:
-        job.status = JobStatus.paid
-        job.paid_at = datetime.now(timezone.utc).isoformat()
-        save_job(job)
-
-    teams = [m.home_team for m in (job.result.matches if job.result else [])]
-    # Deduplicate while preserving order
-    seen: set[str] = set()
-    unique_teams: list[str] = []
-    if job.result:
-        for m in job.result.matches:
-            for t in (m.home_team, m.away_team):
-                if t not in seen:
-                    seen.add(t)
-                    unique_teams.append(t)
+    if not job.paid:
+        mark_paid(job.job_id, session_id)
 
     return templates.TemplateResponse(
         "success.html",
         {
             "request": request,
             "job": job,
-            "teams": unique_teams,
+            "teams": job.request.teams,
         },
     )
 
 
-@app.get("/impossible/{job_id}", response_class=HTMLResponse)
-async def impossible(request: Request, job_id: str):
-    job = load_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return templates.TemplateResponse("impossible.html", {"request": request, "job": job})
+@app.get("/download/{job_id}/{format:path}")
+async def download(job_id: str, format: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or expired")
 
+    if not job.paid:
+        raise HTTPException(status_code=403, detail="Payment required")
 
-# ---------------------------------------------------------------------------
-# Downloads (paid only)
-# ---------------------------------------------------------------------------
+    if format == "pdf":
+        content = generate_pdf(job.schedule)
+        media_type = "application/pdf"
+        filename = "schedule.pdf"
 
-@app.get("/download/{job_id}/pdf")
-async def download_pdf(job_id: str):
-    job = _require_paid_job(job_id)
-    assert job.result is not None
-    pdf_bytes = to_pdf(job.result)
-    filename = f"{job.result.league_name.replace(' ', '_')}_fixtures.pdf"
+    elif format == "csv":
+        content = generate_csv(job.schedule)
+        media_type = "text/csv"
+        filename = "schedule.csv"
+
+    elif format.startswith("ics/"):
+        team_name = urllib.parse.unquote(format[4:])
+        ics_files = generate_ics_per_team(job.schedule)
+        if team_name not in ics_files:
+            raise HTTPException(status_code=404, detail=f"Team '{team_name}' not found")
+        content = ics_files[team_name]
+        media_type = "text/calendar"
+        filename = f"{team_name}.ics"
+
+    else:
+        raise HTTPException(status_code=404, detail="Unknown download format")
+
     return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
+        content=content,
+        media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
-
-@app.get("/download/{job_id}/csv")
-async def download_csv(job_id: str):
-    job = _require_paid_job(job_id)
-    assert job.result is not None
-    csv_bytes = to_csv(job.result)
-    filename = f"{job.result.league_name.replace(' ', '_')}_fixtures.csv"
-    return Response(
-        content=csv_bytes,
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@app.get("/download/{job_id}/ics/{team_name}")
-async def download_ics(job_id: str, team_name: str):
-    job = _require_paid_job(job_id)
-    assert job.result is not None
-    calendars = to_ics_per_team(job.result)
-    if team_name not in calendars:
-        raise HTTPException(status_code=404, detail="Team not found")
-    filename = f"{team_name.replace(' ', '_')}_fixtures.ics"
-    return Response(
-        content=calendars[team_name],
-        media_type="text/calendar",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-# ---------------------------------------------------------------------------
-# Stripe webhook
-# ---------------------------------------------------------------------------
-
-@app.post("/webhook")
-async def stripe_webhook(request: Request):
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature", "")
-    result = handle_webhook(payload, sig_header)
-    if result["status"] == "invalid_signature":
-        raise HTTPException(status_code=400, detail="Invalid signature")
-    return {"received": True}
-
-
-# ---------------------------------------------------------------------------
-# Static policy pages
-# ---------------------------------------------------------------------------
 
 @app.get("/privacy", response_class=HTMLResponse)
 async def privacy(request: Request):
