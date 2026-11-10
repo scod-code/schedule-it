@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-004",
+  "type": "chore",
+  "description": "Update docker-compose.yml to add frontend service alongside existing backend (web) service. Frontend service builds from frontend/Dockerfile, serves on port 3000 (nginx in production mode), depends on backend. Backend service already exists as 'web'; ensure it's accessible to frontend at http://web:8000. Add frontend volume for development hot-reload if needed. Ensure both services can start and communicate.",
+  "status": "pending",
+  "steps": [
+    "1. In docker-compose.yml, rename existing 'web' service to 'backend' for clarity (or keep as 'web' and ensure frontend nginx.conf uses correct upstream).",
+    "2. Add 'frontend' service: build: {context: ./frontend}, image: schedule-it-frontend:latest, ports: ['3000:80'], depends_on: [web or backend], restart: unless-stopped.",
+    "3. Verify frontend/nginx.conf location /api proxy_pass uses the correct service name (http://web:8000 or http://backend:8000) matching the backend service name in docker-compose.yml.",
+    "4. Add comment in docker-compose.yml explaining: backend API on :8000, frontend on :3000, frontend proxies /api to backend.",
+    "5. Optional: add frontend dev volume mount for hot-reload during development: volumes: ['./frontend/src:/app/src:ro'] (only if using dev mode in Docker, which is not typical with Vite)."
+  ],
+  "acceptance_criteria": [
+    "docker-compose.yml includes both backend (web) and frontend services",
+    "frontend service builds from frontend/Dockerfile",
+    "frontend service exposes port 3000",
+    "frontend depends_on backend",
+    "frontend nginx config proxies /api to backend service"
+  ],
+  "verification": [
+    "cd c:\\Users\\somto\\Documents\\Schedule-it && docker-compose build",
+    "cd c:\\Users\\somto\\Documents\\Schedule-it && docker-compose up -d",
+    "curl http://localhost:3000 (should return React app HTML)",
+    "curl http://localhost:8000/health (should return {status: ok})",
+    "Open http://localhost:3000 in browser, verify app loads and can submit form (which hits backend via /api proxy)"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-005",
+  "type": "docs",
+  "description": "Update README.md to reflect new React+Vite frontend and REST API architecture. Replace Jinja2/HTMX references with React. Update Local Development Setup to cover both backend (Python) and frontend (Node.js/npm). Update Architecture section to describe frontend/backend separation. Add API endpoints documentation. Preserve existing content about Stripe setup, constraints, testing (update test command to include frontend tests if any), deployment. Add notes about CORS, environment variables (VITE_API_BASE_URL), and the faster development workflow already documented (keep that section but update Docker instructions to mention both services).",
+  "status": "pending",
+  "steps": [
+    "1. In README.md, update Tech Stack section: change 'Backend: FastAPI + Jinja2 + HTMX' to 'Backend: FastAPI REST API', add 'Frontend: React 18 + Vite + TailwindCSS + React Router'.",
+    "2. Update Local Development Setup > Option 1 to include frontend: add subsection 'Backend' with existing Python instructions, add subsection 'Frontend' with: cd frontend && npm install && npm run dev (runs on localhost:5173). Note: backend must be running first.",
+    "3. Update Local Development Setup > Option 2 (Docker): update docker-compose up instructions to mention both services start. Update note to say: 'Backend API on localhost:8000, Frontend on localhost:3000'.",
+    "4. Update Architecture section: list frontend/ directory with src/{components,pages,api}, App.jsx, main.jsx, vite.config.js, Dockerfile. Update app/main.py description to say 'FastAPI JSON REST API routes with CORS'.",
+    "5. Add 'API Endpoints' section after Architecture with table: Endpoint | Method | Description. List: /health GET (health check), /api/generate POST (submit schedule request, returns preview), /api/jobs/{job_id} GET (job metadata), /api/checkout/{job_id} POST (create Stripe checkout), /webhook POST (Stripe webhook), /api/download/{job_id}/pdf GET, /api/download/{job_id}/csv GET, /api/download/{job_id}/ics/{team} GET.",
+    "6. Update Running Tests section: keep existing pytest command, add: cd frontend && npm test (if tests exist, else note 'Frontend tests: TODO').",
+    "7. Update Deployment section: mention that frontend is a separate service, deployed as static files via nginx or hosted on Vercel/Netlify. Set VITE_API_BASE_URL to production backend URL when building frontend. Backend BASE_URL must allow frontend origin in CORS.",
+    "8. Add note under Stripe Setup: 'For local dev, ensure backend .env has Stripe keys. Frontend does not need Stripe keys (checkout handled by backend).'",
+    "9. Verify all existing sections (Constraints Supported, etc.) remain unchanged."
+  ],
+  "acceptance_criteria": [
+    "README.md mentions React 18 + Vite frontend",
+    "Local Development Setup covers both backend (Python) and frontend (npm)",
+    "Docker instructions mention both services and ports :8000 and :3000",
+    "API Endpoints section lists all new REST routes",
+    "Architecture section describes frontend/ directory",
+    "No references to Jinja2, HTMX, or templates remain"
+  ],
+  "verification": [
+    "Read c:\\Users\\somto\\Documents\\Schedule-it\\README.md and verify all sections updated",
+    "Verify instructions are accurate by following them: start backend, start frontend, test app"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

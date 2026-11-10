@@ -1,0 +1,27 @@
+{
+  "project_type": "FastAPI backend + React frontend (transitioning from Jinja2/HTMX monolith)",
+  "language": "Python 3.11+ (backend), JavaScript/JSX (frontend)",
+  "build_system": "pip for backend, npm+Vite for frontend, Docker Compose for orchestration",
+  "test_framework": "pytest with TestClient for backend API tests",
+  "build_command": "No explicit compile step for Python; frontend will use 'npm run build' in frontend/",
+  "test_command": "cd backend && python -m pytest tests/ -v",
+  "verification_instructions": "1. Run pytest for backend API tests. 2. Start backend with 'uvicorn app.main:app --reload'. 3. Start frontend with 'npm run dev' in frontend/. 4. Test key flows: form submission, preview, payment redirect, downloads.",
+  "snapshot_or_generated_files": "None currently; frontend build output (frontend/dist/) will be generated but not checked in",
+  "environment_constraints": "Stripe keys may be placeholders; payment flow must not crash. Never restart existing dev server on :9001 if running. Windows PowerShell environment.",
+  "contribution_requirements": "No CONTRIBUTING.md or AGENTS.md found; follow standard FastAPI + React practices. Preserve existing solver.py, exporter.py, payments.py, storage.py, models.py, config.py unchanged. Backend must handle CORS for localhost:5173 (Vite default). Frontend must use environment variable for API base URL.",
+  "key_patterns": "Backend: FastAPI with async/await, Pydantic models, SQLite storage via storage.py functions (create_job, find_cached_job, get_job, mark_paid). Routes return JSON or Response objects. Frontend: React 18 functional components, TailwindCSS for styling, fetch API for backend calls.",
+  "relevant_files": [
+    "backend/app/main.py (convert to REST API)",
+    "backend/app/storage.py (read-only: exports create_job, find_cached_job, get_job, mark_paid, record_webhook_event, webhook_event_processed, background_cleanup, initialise_storage)",
+    "backend/app/models.py (read-only: ScheduleRequest, ScheduleResult with .metrics.status, Job with .paid, Match, QualityMetrics, Venue, TimeSlot)",
+    "backend/app/solver.py (read-only: solve_schedule returns ScheduleResult)",
+    "backend/app/exporter.py (read-only: generate_pdf, generate_csv, generate_ics_per_team)",
+    "backend/app/payments.py (read-only: create_checkout_session, verify_webhook)",
+    "backend/app/config.py (read-only: settings object)",
+    "backend/tests/test_api.py (update for JSON responses)",
+    "backend/requirements.txt (read-only)",
+    "docker-compose.yml (add frontend service)",
+    "README.md (update setup instructions)"
+  ],
+  "directory_structure": "backend/ contains app/ (main.py, models.py, storage.py, solver.py, exporter.py, payments.py, config.py), tests/, static/, templates/ (will be removed), Dockerfile, requirements.txt, .env. frontend/ (new) will contain src/ with React app, package.json, vite.config.js, Dockerfile. Root has docker-compose.yml, README.md."
+}

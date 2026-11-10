@@ -1,0 +1,37 @@
+{
+  "id": "FEAT-001",
+  "type": "refactor",
+  "description": "Convert backend/app/main.py from Jinja2/HTMX template server to pure JSON REST API with CORS. Remove StaticFiles, Jinja2Templates. Add CORS middleware for localhost:5173. Implement JSON routes: GET /api/health, POST /api/generate (accepts ScheduleRequest JSON, returns {job_id, status, preview, teams} or 422 {status:infeasible, reason}), GET /api/jobs/{job_id}, POST /api/checkout/{job_id} (returns {checkout_url}), POST /api/webhook (Stripe), GET /api/download/{job_id}/{format} for pdf/csv/ics. Keep GET /health for backward compat. Preserve existing logic from storage.py (create_job, find_cached_job, get_job, mark_paid) and solver.py (solve_schedule). Stripe setup deferred: must compile even with placeholder keys.",
+  "status": "pending",
+  "steps": [
+    "1. In backend/app/main.py, remove imports for StaticFiles, Jinja2Templates, HTMLResponse, RedirectResponse. Add CORSMiddleware from fastapi.middleware.cors.",
+    "2. Remove app.mount('/static', ...) and templates = Jinja2Templates(...) lines.",
+    "3. Add CORS middleware after app = FastAPI(lifespan=lifespan): app.add_middleware(CORSMiddleware, allow_origins=['http://localhost:5173', 'http://localhost:3000'], allow_credentials=True, allow_methods=['*'], allow_headers=['*']).",
+    "4. Keep GET /health route as-is (returns {status: ok}).",
+    "5. Replace GET / and all HTMX routes (/htmx/venue-row, /htmx/slot-row) with a simple root route: GET / returns {message: 'Schedule-it API', docs: '/docs'}.",
+    "6. Replace POST /generate with POST /api/generate that accepts ScheduleRequest JSON body. Logic: call find_cached_job(req); if cached, return {job_id: cached_job.job_id, status: 'cached'}. Else call solve_schedule(req) via asyncio.to_thread. If result.metrics.status == 'INFEASIBLE', return JSONResponse({status: 'infeasible', reason: result.infeasibility_reason}, status_code=422). Else create_job(req, result) and return {job_id, status: 'generated', preview: {matches: [first 5 rounds as dicts], remaining_count: total-len(first5), quality_metrics: result.metrics.model_dump(), teams: req.teams}}.",
+    "7. Add GET /api/jobs/{job_id} that calls get_job(job_id), returns 404 if None, else {job_id, paid: job.paid, teams: job.request.teams, created_at: job.created_at.isoformat()}.",
+    "8. Replace GET /checkout/{job_id} with POST /api/checkout/{job_id}. Logic: get_job, 404 if None, call create_checkout_session(job_id) from payments.py, return {checkout_url: url}.",
+    "9. Keep POST /webhook as-is (already returns JSON, no HTML dependency).",
+    "10. Replace GET /download/{job_id}/{format:path} with three explicit routes: GET /api/download/{job_id}/pdf, GET /api/download/{job_id}/csv, GET /api/download/{job_id}/ics/{team_name}. Logic unchanged, still returns Response with content.",
+    "11. Remove GET /preview/{job_id}, GET /success, GET /privacy, GET /terms, GET /refund routes (frontend will handle these pages).",
+    "12. Ensure all new routes use JSONResponse or return dicts (FastAPI auto-converts). Import JSONResponse from fastapi.responses."
+  ],
+  "acceptance_criteria": [
+    "GET /health returns {status: ok}",
+    "POST /api/generate with valid ScheduleRequest JSON returns {job_id, status, preview, teams}",
+    "POST /api/generate with infeasible request returns 422 {status: infeasible, reason}",
+    "GET /api/jobs/{job_id} returns job metadata or 404",
+    "POST /api/checkout/{job_id} returns {checkout_url}",
+    "GET /api/download/{job_id}/pdf returns 403 for unpaid jobs, PDF bytes for paid jobs",
+    "No Jinja2 or StaticFiles imports remain in main.py",
+    "CORS headers present in responses when origin is localhost:5173"
+  ],
+  "verification": [
+    "cd backend && python -m pytest tests/test_api.py::test_health_endpoint_returns_ok -v",
+    "cd backend && python -m pytest tests/test_api.py::test_download_pdf_requires_payment -v",
+    "Start backend with 'cd backend && uvicorn app.main:app --reload' and manually test POST /api/generate with curl or Postman"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

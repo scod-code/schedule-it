@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-002",
+  "type": "test",
+  "description": "Update backend/tests/test_api.py to test JSON REST API endpoints instead of HTML form submission and redirects. Replace form-based tests with JSON request tests. Update test_generate_redirects_to_preview to test POST /api/generate returns JSON with job_id. Add tests for GET /api/jobs/{job_id}, POST /api/checkout/{job_id}. Preserve existing tests for download, health, webhook, cache, and success-does-not-mark-paid logic (though /success is removed, test the principle that only webhook marks paid).",
+  "status": "pending",
+  "steps": [
+    "1. In backend/tests/test_api.py, update test_generate_redirects_to_preview: change to test_generate_returns_json. Use client.post('/api/generate', json={teams: [...], venues: [...], slots: [...], round_robin: 'single'}) with proper ScheduleRequest dict. Assert resp.status_code in (200, 422). If 200, assert 'job_id' in resp.json() and 'preview' in resp.json().",
+    "2. Add test_get_job_returns_metadata: create a job via storage.create_job, then client.get(f'/api/jobs/{job_id}'). Assert resp.status_code == 200 and resp.json() has job_id, paid, teams, created_at.",
+    "3. Add test_checkout_returns_url: create job, call client.post(f'/api/checkout/{job_id}'). Assert resp.status_code == 200 and 'checkout_url' in resp.json().",
+    "4. Update test_download_pdf_requires_payment: change URL to /api/download/{job_id}/pdf. Logic unchanged.",
+    "5. Keep test_health_endpoint_returns_ok unchanged (still tests /health).",
+    "6. Keep test_identical_request_reuses_persisted_schedule unchanged (tests caching via storage, not HTTP).",
+    "7. Remove or comment out test_success_page_does_not_mark_job_paid (since /success route is removed). Replace with test_only_webhook_marks_paid: create job, verify job.paid is False, call client.get('/api/jobs/{job_id}') and verify paid:false, then simulate marking paid via storage.mark_paid and verify it changes.",
+    "8. Keep test_webhook_invalid_signature_returns_400 unchanged.",
+    "9. Add test_generate_infeasible_returns_422: POST /api/generate with insufficient slots (e.g., 4 teams single round-robin needs 6 slots, provide 3). Assert resp.status_code == 422 and resp.json()['status'] == 'infeasible'."
+  ],
+  "acceptance_criteria": [
+    "test_generate_returns_json passes",
+    "test_get_job_returns_metadata passes",
+    "test_checkout_returns_url passes",
+    "test_download_pdf_requires_payment passes with new URL",
+    "test_generate_infeasible_returns_422 passes",
+    "test_health_endpoint_returns_ok passes",
+    "test_webhook_invalid_signature_returns_400 passes",
+    "All tests in test_api.py pass"
+  ],
+  "verification": [
+    "cd backend && python -m pytest tests/test_api.py -v"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

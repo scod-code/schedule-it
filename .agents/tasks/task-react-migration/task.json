@@ -1,0 +1,7 @@
+{
+  "task_id": "task-react-migration",
+  "task_description": "Migrate Schedule-it from Jinja2+HTMX to React+Vite frontend with pure JSON REST API backend",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "FEAT-005"],
+  "blocked_reason": null
+}

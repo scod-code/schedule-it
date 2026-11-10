@@ -1,10 +1,29 @@
-version: "3.9"
 services:
-  web:
-    build: ./backend
+  backend:
+    build:
+      context: ./backend
+      cache_from:
+        - schedule-it-backend:latest
+    image: schedule-it-backend:latest
     ports:
       - "8000:8000"
     env_file:
       - ./backend/.env
+    restart: unless-stopped
     volumes:
-      - ./backend/static:/app/static
+      - jobs_data:/data
+
+  frontend:
+    build:
+      context: ./frontend
+      cache_from:
+        - schedule-it-frontend:latest
+    image: schedule-it-frontend:latest
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  jobs_data:
