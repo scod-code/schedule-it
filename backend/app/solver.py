@@ -5,6 +5,7 @@ from ortools.sat.python import cp_model
 from app.models import (
     ScheduleRequest, ScheduleResult, Match, QualityMetrics, TimeSlot, Venue
 )
+from app.config import settings
 
 
 def solve_schedule(request: ScheduleRequest) -> ScheduleResult:
@@ -180,7 +181,7 @@ def solve_schedule(request: ScheduleRequest) -> ScheduleResult:
         model.Minimize(sum(objective_terms))
     
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.max_time_in_seconds = float(settings.solver_time_limit_seconds)
     solver.parameters.num_workers = 4
     
     status_code = solver.Solve(model)

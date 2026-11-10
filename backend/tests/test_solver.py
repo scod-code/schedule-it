@@ -472,6 +472,8 @@ def test_ics_export_per_team():
         assert len(ics_bytes) > 0, f"Empty ICS for {team}"
         cal = Calendar.from_ical(ics_bytes)
         events = [c for c in cal.walk() if c.name == "VEVENT"]
+        assert events
+        assert events[0]["DTSTART"].dt.tzinfo is not None
         team_matches = [m for m in result.matches if m.home_team == team or m.away_team == team]
         assert len(events) == len(team_matches), (
             f"{team}: expected {len(team_matches)} events, got {len(events)}"

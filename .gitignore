@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Environment — NEVER commit real secrets
+.env
+!.env.example
+
+# Job data (user-uploaded, not for version control)
+jobs/
+backend/jobs/
+
+# Logs and temp output files
+*.log
+*.txt
+!README.md
+
+# VS Code
+.vscode/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Docker layer cache hints (local only, not the backend one)
+frontend/.dockerignore
+
+# Agents / workflow artifacts (internal tooling)
+.agents/
+backend/.agents/
+
+# Misc scripts created during development
+run_pytest.py
+run_pytest2.py
+run_pytest3.py
+run_pytest_inline.py
+run_tests.ps1
+run_npm.ps1
+run_test.bat
+test_import.py
+apiout.txt
+apires.txt
+pytest_out.txt
+test_output.txt
+backend/test_output.txt
+backend/pip_output.txt
+tres.txt

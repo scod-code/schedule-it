@@ -10,8 +10,8 @@ def create_checkout_session(job_id: str) -> str:
         payment_method_types=["card"],
         line_items=[{"price": settings.stripe_price_id, "quantity": 1}],
         mode="payment",
-        success_url=f"{settings.base_url}/success?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=f"{settings.base_url}/preview/{job_id}",
+        success_url=f"{settings.app_base_url}/success?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{settings.app_base_url}/preview/{job_id}",
         metadata={"job_id": job_id},
     )
     return session.url
