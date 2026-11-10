@@ -2,6 +2,7 @@ import io
 import csv
 import datetime
 from typing import Dict, List
+from zoneinfo import ZoneInfo
 
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -195,8 +196,11 @@ def generate_ics_per_team(result: ScheduleResult) -> Dict[str, bytes]:
                 f"{match.home_team} vs {match.away_team} @ {match.venue}"
             ))
 
-            # Combine date + time into a naive datetime
-            dtstart = datetime.datetime.combine(match.date, match.time)
+            # Slot times are entered as local UK fixture times. Include the
+            # Europe/London zone so calendar clients apply GMT/BST correctly.
+            dtstart = datetime.datetime.combine(
+                match.date, match.time, tzinfo=ZoneInfo("Europe/London")
+            )
             dtend = dtstart + datetime.timedelta(minutes=90)
             event.add("DTSTART", dtstart)
             event.add("DTEND", dtend)

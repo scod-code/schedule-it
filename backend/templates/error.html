@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Error — Schedule-it{% endblock %}
+
+{% block content %}
+<section class="form-section" style="text-align:center; padding:3rem 2rem;">
+  <div style="font-size:3.5rem; margin-bottom:0.75rem; color:#dc2626;">⚠</div>
+  <h1 class="error-heading">Something went wrong</h1>
+  <p style="color:#475569; margin-bottom:2rem; max-width:560px; margin-left:auto; margin-right:auto;">
+    {{ message }}
+  </p>
+  {% if detail %}
+  <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:2rem;">
+    Technical detail: {{ detail }}
+  </p>
+  {% endif %}
+
+  <a href="/" class="btn-primary" style="margin-top:1.5rem; display:inline-block">&larr; Back to home</a>
+  <p class="form-note" style="margin-top:1rem">If you believe you have been charged, please <a href="/refund">contact us</a>.</p>
+</section>
+{% endblock %}

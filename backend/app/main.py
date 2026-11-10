@@ -1,3 +1,4 @@
+import re
 import urllib.parse
 import asyncio
 from contextlib import asynccontextmanager
@@ -13,7 +14,10 @@ from pydantic import ValidationError
 
 from app.config import settings
 from app.models import ScheduleRequest, Venue, TimeSlot
-from app.storage import create_job, get_job, mark_paid, background_cleanup
+from app.storage import (
+    create_job, find_cached_job, get_job, mark_paid, record_webhook_event,
+    background_cleanup, initialise_storage,
+)
 from app.solver import solve_schedule
 from app.exporter import generate_pdf, generate_csv, generate_ics_per_team
 from app.payments import create_checkout_session, verify_webhook
@@ -25,6 +29,7 @@ from app.payments import create_checkout_session, verify_webhook
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    initialise_storage()
     asyncio.create_task(background_cleanup())
     stripe.api_key = settings.stripe_secret_key
     yield
@@ -39,6 +44,10 @@ templates = Jinja2Templates(directory="templates")
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -171,8 +180,12 @@ async def generate(request: Request):
             status_code=400,
         )
 
-    # --- Solve ---
-    result = solve_schedule(req)
+    # Reuse an unexpired answer for an identical request. CP-SAT is CPU-bound,
+    # so misses run in a worker thread and do not block the async event loop.
+    cached_job = find_cached_job(req)
+    if cached_job:
+        return RedirectResponse(f"/preview/{cached_job.job_id}", status_code=303)
+    result = await asyncio.to_thread(solve_schedule, req)
 
     if result.metrics.status == "INFEASIBLE":
         return templates.TemplateResponse(
@@ -226,27 +239,68 @@ async def webhook(request: Request):
     except (ValueError, stripe.error.SignatureVerificationError):
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
+    event_id = event.get("id")
+    if event_id:
+        # A successful prior delivery can be acknowledged immediately. New
+        # events are recorded only after their side effects complete, so a
+        # transient database error does not permanently consume the retry.
+        from app.storage import webhook_event_processed
+        if webhook_event_processed(event_id):
+            return {"status": "already_processed"}
+
     if event["type"] == "checkout.session.completed":
         session_obj = event["data"]["object"]
         job_id = session_obj["metadata"]["job_id"]
         session_id = session_obj["id"]
         mark_paid(job_id, session_id)
 
+    if event_id:
+        record_webhook_event(event_id)
+
     return {"status": "ok"}
 
 
 @app.get("/success", response_class=HTMLResponse)
-async def success(request: Request, session_id: str):
-    session = stripe.checkout.Session.retrieve(session_id)
-    job_id = session.metadata["job_id"]
+async def success(request: Request, session_id: str, job_id: Optional[str] = None):
+    """
+    Read-only landing page after Stripe checkout.
 
-    job = get_job(job_id)
+    Payment state is set exclusively by the /webhook handler (signature-verified).
+    This route only reads job.paid — it never calls mark_paid — so it cannot be
+    used as a second payment-unlock path.
+
+    If the job is not yet marked paid (webhook may still be in-flight), the
+    template shows a "payment processing" message with a short polling hint.
+    """
+    # Attempt to recover job_id from the Stripe session when not supplied
+    # directly in the URL. Any Stripe SDK error is caught and handled gracefully.
+    resolved_job_id: Optional[str] = job_id
+    if not resolved_job_id:
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            resolved_job_id = session.metadata.get("job_id")
+        except stripe.error.StripeError as exc:
+            # Stripe is unavailable or the session_id is invalid; show a generic error page.
+            return templates.TemplateResponse(
+                "error.html",
+                {
+                    "request": request,
+                    "message": "We could not verify your payment session. "
+                               "Please contact support if you have been charged.",
+                    "detail": str(exc),
+                },
+                status_code=502,
+            )
+
+    if not resolved_job_id:
+        raise HTTPException(status_code=400, detail="Missing job_id in session metadata")
+
+    job = get_job(resolved_job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found or expired")
 
-    if not job.paid:
-        mark_paid(job.job_id, session_id)
-
+    # Do NOT call mark_paid here. The webhook (signature-verified) is the sole
+    # authority for flipping the paid flag.
     return templates.TemplateResponse(
         "success.html",
         {
@@ -283,7 +337,11 @@ async def download(job_id: str, format: str):
             raise HTTPException(status_code=404, detail=f"Team '{team_name}' not found")
         content = ics_files[team_name]
         media_type = "text/calendar"
-        filename = f"{team_name}.ics"
+        # Sanitise team_name before embedding in the Content-Disposition header.
+        # Strip every character outside the safe ASCII set to prevent header
+        # injection via a crafted team name (e.g. one containing '"' or ';\n').
+        safe_team = re.sub(r'[^A-Za-z0-9 _\-]', '_', team_name)
+        filename = f"{safe_team}.ics"
 
     else:
         raise HTTPException(status_code=404, detail="Unknown download format")
